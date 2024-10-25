@@ -1,0 +1,157 @@
+
+Copyright 2022-2024 Thales Group. All rights reserved.
+
+
+
+README-PQC-CONFIG
+=================
+
+  The configuration file is "/etc/Chrystoki.conf" (on UNIX)
+  and "%ChrystokiConfigurationPath%\crystoki.ini" (on Windows).
+
+
+
+SUPPORTED ALGORITHMS/KEYTYPES
+=============================
+
+  Classic:
+
+    RSA, DSA, EC
+
+
+  Neo-classic:
+
+     ED25519/ED448,
+     X25519/X448
+
+
+  PQC:
+
+    KEM:
+
+      kyber, mlkem
+
+
+    SIG:
+
+      dilithium, mldsa,
+      falcon (limited),
+      sphincs (limited)
+
+
+  NOTE: for a more accurate list of algorithms, including hybrids and composites,
+    run command such as:
+
+    # export MYPROV="-provider lunaprov -provider default"
+    # openssl list $MYPROV -kem-algorithms | grep lunaprov
+    # openssl list $MYPROV -signature-algorithms | grep lunaprov
+
+
+
+TABLE 1. FULL LIST OF CONFIGURATION SETTINGS
+============================================
+
+  These settings configure the engine/provider (not cryptoki).
+
+    NOTE: all variable names are case sensitive on UNIX; e.g., "LibPath" and not "libpath".
+    NOTE: all variable definitions end with a semi-colon (";") on UNIX.
+  
+                        DEFAULT
+  SETTING               VALUE    WHY CHANGE THIS VALUE?
+  --------------------- -------- -------------------------------------------------------
+
+MANDATORY:
+
+  LibPath64.............none.....must set path to cryptoki shared library (64-bit).
+  EngineInit............none.....must set authentication settings.
+
+OPTIONAL:
+
+  DisableCheckFinalize..0........set to 1 if NOT using a forking application; e.g., apache, nginx.
+  IntermediateProcesses.1........set to actual number of forks between the main process and the child process.
+
+  DisableDsa............1........set to 0 if DSA in hardware is required.
+  DisableEcdsa..........1........set to 0 if ECDSA in hardware is required.
+  DisableRand...........1........set to 0 if RNG in hardware is required.
+  DisableRsa............0........set to 1 if RSA in hardware is not required.
+
+  LogLevel..............0........set to 1 for logfiles in "/<LogRootDir>/e_lunahsm/lunaerr/".
+  LogRootDir............/tmp.....set to other path if "/tmp" is not feasible.
+
+  DisableMultiThread....0........set to 1 if thread-safety issue.
+  DisableSessionCache...1........set to 0 to enable session cache.
+
+  EnableLoadPrivKey.....1........required for "ENGINE_load_private_key" on openssl3.
+  EnableLoadPubKey......1........required for "ENGINE_load_public_key" on openssl3.
+
+  EnableRsaGenKeyPair...0........set to 1 for apps that must call "RSA_generate_key" (e.g., BIND).
+  EnableDsaGenKeyPair...0........set to 1 for apps that must call "DSA_generate_key" (e.g., BIND).
+
+  EnableLoginInit.......0........set to 1 for login via engine/provider (i.e., instead of login via "sautil").
+
+  Appliance.............Luna.....set to KeySecure to work in KeySecure mode.
+
+NEW (for OpenSSL v1.0.0e and above)
+
+  EnablePkeyMeths.......1........required for RSA-PSS and RSA-OAEP.
+  EnablePkeyAsn1Meths...1........required by engine/provider on openssl3.
+  EnableDigests.........1........for future consideration (vendor-specific digest algorithms?).
+
+NEW (as of OpenSSL v1.1.0)
+
+  EnableLimitedUser.....0........Set to 1 for login as Crypto-User (default is Crypto-Officer).
+                                 Note there is a corresponding change in sautil; i.e., "sautil -u ...".
+
+DEPRECATED (as of OpenSSL v1.1.0)
+
+  DisablePublicCrypto...1........As a result, public key crypto in software always.
+  EnableRsaSignVerify...0........As a result, RSA_sign redirects to RSA_private_encrypt always.
+
+NEW (as of OpenSSL v1.1.1)
+
+  EnableRsaPkcsPadding..0........Set to 1 to do padding in engine/provider.
+  EnableEcGenKeyPair....0........Set to 1 for EC keygen in hardware.
+  RecoveryLevel.........1........Set depth of recovery to 0 = no recovery, 1 = c_login, 2 = c_finalize.
+
+NEW (as of OpenSSL v3.2.0)
+
+  EnablePqcGenKeyPair...0........Set to 1 for PQC keygen in hardware.
+  IncludePqc..........ALL........Set to comma-separated list of algorithms preferred in hardware.
+  ExcludePqc.........NONE........Set to comma-separated list of algorithms preferred in software.
+
+NEW (as of OpenSSL v3.2.1)
+
+  EnableEdGenKeyPair....0........Set to 1 for ED (ed25519, ed448) keygen in hardware.
+
+
+
+EXAMPLES
+========
+
+EXAMPLE 1. configure for PQC KEM keys in hardware (TLS 1.3 usecase, "openssl s_server").
+
+  GemEngine = {
+    LibPath64 = /home/user1/libcklog2.so;
+
+    DisableEcdsa = 0;
+    DisablePqc = 0;
+
+    EnableEcGenKeyPair = 1;
+    EnableEdGenKeyPair = 1;
+    EnablePqcGenKeyPair = 1;
+
+    EngineInit = "myTokenLabel":0:0:passdev=console;
+    EnableLoginInit = 1;
+
+    DisableCheckFinalize = 1;
+    IntermediateProcesses = 0;
+    DisableSessionCache = 0;
+
+    IncludePqc = ALL;
+    ExcludePqc = NONE;
+  }
+
+
+
+Copyright 2022-2024 Thales Group. All rights reserved.
+

@@ -1,0 +1,49 @@
+Copyright 2022-2023 Thales Group. All rights reserved.
+
+
+
+README-PQC
+
+  PQC is available as of OpenSSL version '3.2.0', via provider 'lunaprov'.
+
+  This doc shows how to manipulate PQC keys using utilities 'sautil' and 'openssl'.
+  
+  sautil and openssl are built according to instructions 'README-PQC-BUILD'.
+
+  The provider is configured according to instructions 'README-PQC-CONFIG'.
+
+
+
+INSTRUCTIONS
+
+
+  STEP 1. Open connection (and login).
+
+    # sautil -v -s 1 -i 10:11 -o -q
+
+    NOTE: you should select a different value than "10:11"
+      to customize your application environment.
+      And you may select a different slot number than "1".
+
+
+  STEP 2. Generate keypair and keyfile (using openssl).
+
+    # openssl genpkey -provider lunaprov -provider default -algorithm dilithium3 -out tmppqc.pkey
+
+    NOTE: using sautil to generate PQC key is not available.
+    NOTE: using sautil to generate keyfile (from existing HSM key) is not available.
+
+
+  STEP 3. Sign some data; e.g., sign a certificate request and verify the signature.
+
+    # openssl req -provider lunaprov -provider default -sha256 -new -nodes \
+      -key tmppqc.pkey -out tmppqc.csr -subj "/CN=tmppqc" -verify -sigopt digest:sha256
+
+
+  STEP 4. Close connection (and logout).
+
+    # sautil -v -s 1 -i 10:11 -c
+
+
+
+Copyright 2022-2023 Thales Group. All rights reserved.

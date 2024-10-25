@@ -1,0 +1,104 @@
+Copyright (C) 2016 SafeNet, Inc. All rights reserved.
+
+
+
+README-OBUILD
+
+  "obuild8.makefile" is a makefile to build OpenSSL from source and to build the
+  dynamic gem engine on Windows.
+
+
+PREREQUISITES:
+
+  Active State perl needs to be installed.
+  Cygwin needs to be installed and its bin directory needs to be in PATH as obuild requires some UNIX commands on Windows.
+
+
+INSTRUCTIONS:
+
+
+  STEP 1. Download and extract an OpenSSL source tarball from https://www.openssl.org
+          and place the .tar.gz file inside of the gemengine directory.
+
+
+  STEP 2. Modify the VERSION and BASEVERSION variables in obuild8.makefile to match the
+          OpenSSL version of the downloaded .tar.gz file.
+
+
+  STEP 3. In a Visual Studio Command prompt (64 bit for 64 bit Windows binaries) compile OpenSSL
+          with the gem engine.
+
+    #  nmake -f obuild8.makefile cleanall
+
+    #  nmake -f obuild8.makefile all-win32  CFG_SUFFIX=win32
+OR
+    #  nmake -f obuild8.makefile all-win64  CFG_SUFFIX=win64
+
+
+  STEP 4. Tar balls with the OpenSSL binaries, dynamic gem engine and sautil are in the LUNALocal directory.
+          As well the binaries will be located at c:\cygwin\usr\local\ssl.
+
+
+  STEP 5. Use sautil to open the access to HSM and generate the keys
+
+    #  sautil -v -s 1 -i 10:11 -o -q
+
+    #  sautil -v -s 1 -i 10:11 -g 1024 -f tmpkey.pem
+
+
+  STEP 6. Test the openssl command using the gem engine.
+
+    #  openssl req  -engine gem  -new -nodes -key tmpkey.pem -out tmpkey.req -days 30 -verify
+
+    NOTE:  It make be required to set a few environment variables first:
+
+      #  set CONF_PATH="D:\Program Files\SafeNet\LunaClient\cryptoki.dll"
+
+      #  set OPENSSL_CONF=C:\cygwin\usr\local\ssl\openssl.cnf
+
+
+  STEP 7. Be sure to close the connection if using an AppID to open it.
+
+     #  sautil.exe -v -s 1 -i 10:11 -c
+
+
+  STEP 8. Modify the openssl.conf file to have the following section in place.
+
+#add near the top of the file
+openssl_conf = openssl_init
+  
+#add to the bottom of the file
+[ openssl_init ]
+engines = engine_section
+
+[ engine_section ]
+gem = gem_section
+
+[ gem_section ]
+dynamic_path = C:\\cygwin\\usr\\local\\ssl\\lib\\engines\\gem.dll
+default_algorithms = ALL
+
+
+  STEP 9. Modify the chrystoki.ini file to add the GemEngine section.
+
+[GemEngine]
+EngineInit = 1:10:11
+EnableDsaGenKeyPair = 1
+EnableRsaGenKeyPair = 1
+DisablePublicCrypto = 1
+EnableRsaSignVerify = 1
+EnableLoadPubKey = 1
+EnableLoadPrivKey = 1
+DisableCheckFinalize = 1
+DisableEcdsa = 1
+DisableDsa = 0
+DisableRand = 0
+LibPath = D:\Program Files\SafeNet\LunaClient\cryptoki.dll
+LibPath64 = D:\Program Files\SafeNet\LunaClient\cryptoki.dll
+
+    NOTE:  See README-GEM-CONFIG for information on doing other configurations.
+
+
+
+
+Copyright (C) 2016 SafeNet, Inc. All rights reserved.

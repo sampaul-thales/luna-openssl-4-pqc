@@ -1,0 +1,79 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+PURPOSE
+
+
+  Configure OpenSSL to enable engine by default.
+
+  The result is an existing application that can support HSM via 
+  dynamically-loadable engine module.
+
+
+
+PROCEDURE
+
+
+  STEP 1. Locate the openssl.cnf and engines directory
+
+    # openssl version -d
+    OPENSSLDIR: "/etc/pki/tls"
+
+    The openssl.cnf file is located in this directory.  Note that this is for the openssl that is in PATH.  Run "which openssl" to make sure it is the right one.
+
+    # ./gembuild locate-engines
+
+    This gives the directory where the libgem.so should be located.  Note that this is for the openssl that is in PATH.
+
+
+  STEP 2. Edit the openssl.cnf file.
+
+    Example:
+
+    # Insert near top of file openssl.cnf:
+    openssl_conf = openssl_init
+
+
+    # Insert at bottom of file openssl.cnf:
+    [ openssl_init ]
+    engines = engine_section 
+
+    [ engine_section ]
+    gem = gem_section
+
+    [ gem_section ]
+    dynamic_path = /usr/lib64/openssl/engines/libgem.so
+    default_algorithms = ALL 
+
+
+  STEP 3. Test the application.
+
+    e.g., openssl command-line WITH explicit engine:
+
+      # openssl req -engine gem -new -nodes -key tmpkey.pem -out tmpkey.req -days 30 -verify
+
+
+    e.g., openssl command-line WITHOUT explicit engine:
+
+      # openssl req   -new -nodes -key tmpkey.pem -out tmpkey.req -days 30 -verify 
+
+
+    NOTE: See file "README-RSA" for a complete example using RSA keys.
+
+
+
+NOTES
+
+
+  A similar procedure for enabling engine by default is described here: 
+  "https://www.openssl.org/docs/apps/config.html".
+
+  The default name is "openssl_conf" which affects all applications.
+
+  Custom applications may use an alternative name such as "myapplicaton_conf"
+  that is referenced by C-language function 'OPENSSL_config("myapplicaton_conf")'.
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

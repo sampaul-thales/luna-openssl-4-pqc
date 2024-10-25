@@ -1,0 +1,68 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+README-DSA
+
+
+  The following steps show how to manipulate DSA keys
+  using utilities 'sautil' and 'openssl'.
+  
+  sautil and openssl have locations that depend on steps followed in "README-GEMBUILD".
+
+  The Gem HSM middleware is configured according to file "README-GEM-CONFIG".
+
+
+
+INSTRUCTIONS
+
+
+  NOTE:  Ensure that the line "DisableDsa = 0;" is in the GemEngine section of the Chrystoki.conf file.  The default value is 1.
+         See README-GEM-CONFIG for details.
+
+
+  STEP 1. Open connection (and login).
+
+    # sautil -v -s 1 -i 10:11 -o -q
+
+    NOTE: you should select a different value than "10:11"
+      to customize your application environment.
+      And you may select a different slot number than "1".
+
+
+  STEP 2. Generate DSA parameters.
+
+    # openssl dsaparam -out dsaparam.pem 1024
+
+
+  STEP 3a. Generate keypair and keyfile (for use with OpenSSL).
+
+    # sautil -v -s 1 -i 10:11 -d 1024:dsaparam.pem -f tmpkey.pem
+
+
+or, STEP 3b. Generate keyfile (from existing key).
+
+
+    # sautil -v -s 1 -i 10:11 -a 0:DSA -f tmpkey.pem
+
+
+  STEP 4. Sign some data; e.g., sign a certificate request and verify the signature.
+
+    # openssl req -engine gem -new -nodes -key tmpkey.pem -out tmpkey.req -days 30 -verify
+
+
+  STEP 5. Close connection (and logout).
+
+    # sautil -v -s 1 -i 10:11 -c
+
+
+
+For more help, run command "sautil -h".
+
+To import keys from other toolchains, consider using the
+certificate management utility ("cmu") provided
+with the main product release.
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

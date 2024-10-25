@@ -1,0 +1,122 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+PURPOSE
+
+  To build the Luna openssl engine against openssl-1.0.2a using the current _cdrom_apache.tgz containing openssl-1.0.1i.
+  
+  The result is a dynamically-loadable engine module to work with openssl-1.0.2a.
+
+
+
+ASSUMPTIONS
+
+  The openssl-1.0.2a package has been downloaded, configured, compiled and installed to /usr/local/ssl.
+  As well it needs to have been configured with the shared option (E.g. ./config shared <other options>).
+
+  The openssl-1.0.2a source directory is at <open_ssl_source_dir>.
+
+  The latest _cdrom_apache.tgz toolkit has been downloaded.  Contact support to obtain this.
+
+
+
+PROCEDURE
+
+
+  STEP 1. Copy certain header files from the openssl source directory to the installed ssl include directory.
+
+	# cp <open_ssl_source_dir>/crypto/ec/ec_lcl.h /usr/local/ssl/include/openssl
+     
+	# cp <open_ssl_source_dir>/crypto/ecdsa/ecs_locl.h /usr/local/ssl/include/openssl
+
+
+  STEP 2. Extract _cdrom_apache.tgz to a location of your choice.
+
+	# tar xvfz _cdrom_apache.tgz
+
+
+  STEP 3. Extract the openssl-1.0.1i.tar.gz inside of _cdrom_apache.
+
+	# cd _cdrom_apache
+
+	# tar xvfz openssl-1.0.1i.tar.gz
+
+
+  STEP 4. Modify e_lunaca3.c to point to the correct ec header files.
+
+	# cd openssl-1.0.1i/engines
+
+	Modify e_lunaca3.c around line 128 making the change from:
+
+#include "../crypto/ec/ec_lcl.h"
+#include "../crypto/ecdsa/ecs_locl.h"
+
+	to:
+
+#include <openssl/ec_lcl.h>
+#include <openssl/ecs_locl.h>
+
+
+  STEP 5. Create a file called makefile.luna inside of the engines directory as shown below and modify for your environment (-m32 or -m64)
+
+------Start of file------  
+#!/usr/bin/make 
+ 
+SSL=/usr/local/ssl
+CC=gcc 
+CFLAGS=-fPIC -m64 -O3 
+INCLUDES=-I$(SSL)/include
+DEFINES=-DOPENSSL_PIC -DOPENSSL_THREADS -D_REENTRANT -DDSO_DLFCN -DHAVE_DLFCN_H -DTERMIO 
+LD=gcc 
+LDFLAGS=-fPIC -m64 -shared 
+LDEXTRA=-ldl -L$(SSL)/lib -lcrypto 
+ 
+default: 
+	$(CC) $(CFLAGS) $(INCLUDES) $(DEFINES) -c -o e_lunaca3.o e_lunaca3.c 
+	$(LD) $(LDFLAGS) -o liblunaca3.so e_lunaca3.o $(LDEXTRA) 
+	file liblunaca3.so 
+
+clean: 
+	rm -f e_lunaca3.o 
+	rm -f liblunaca3.so
+ 
+------End of file------  
+
+
+  STEP 6. Compile the liblunaca3.so
+  
+	# make -f makefile.luna
+
+	This should generate the dynamic engine file called liblunaca3.so.
+
+
+  STEP 7. Copy the engine share object to the installed ssl engines directory and create a soft link.
+
+	# cp liblunaca3.so /usr/local/ssl/lib/engines/liblunaca3.so
+
+	# ln -s /usr/local/ssl/lib/engines/liblunaca3.so /usr/local/ssl/lib/engines/libLunaCA3.so 
+
+
+
+  STEP 8. Verify the luna engine is properly installed.
+
+	# /usr/local/ssl/bin/openssl engine -v LunaCA3
+
+
+
+  STEP 9.  Perform configuration.
+	
+	Go to the _cdrom_apache directory that was extracted in STEP 1:
+
+	See README-OPTIMIZE for information on how to configure the /etc/Chrystoki.conf to
+	fill out a EngineLunaCA3 section.
+
+	See README-OPENSSL-CONFIG in order to make the LunaCA3 engine used by default.
+
+	See other README files for examples of using engine and examples of sautil command (needs to be compiled and installed separately)
+	
+
+  
+	
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

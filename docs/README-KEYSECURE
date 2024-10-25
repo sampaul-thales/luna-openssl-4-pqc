@@ -1,0 +1,49 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+README-KEYSECURE
+
+
+  This README will guide you how to configure the gem tool to attach to a KeySecure appliance.
+
+  You will need to modify GemKS_setup.sh to point to your gem folder and GemKS properties file.
+
+  These files are located in <path to gemengine>/keysecure.
+
+  sample GemKS_setup.sh:
+#!/bin/sh
+
+# to run; source GemKS_setup.sh
+#         or . GemKS_setup.sh
+
+export SFNT_HSMAPI_BASE=<path to gemengine>/keysecure
+export NAE_Properties_Conf_Filename=$SFNT_HSMAPI_BASE/GemKS.properties
+export IngrianNAE_Properties_Conf_Slot_ID_Max=100
+export IngrianNAE_Properties_Conf_SessionID_Max=100
+
+  You will then need to modify your GemKS.properties file.  The modifications you make to the GemKS.properties file
+  dictate how to connect to the KeySecure appliance.  The details on how to modify the properties file are given in
+  007-012921-001_protectdb_pkcs11_oracle_tde_integrationguide_v6.1.1-RevB which can be retrieved from our customer portal.
+
+  The typical changes are:
+
+  ...
+  NAE_IP=<your KeySecure appliance IP address>
+  ...
+  NAE_Port=9000 <-- this is the default insecure port
+  ...
+  Protocol=tcp <-- this is the typical insecure protocol, if you desire a secure connection then read the details in the guide.
+  ...
+  Log_File=/tmp/ProtectApp-Sample.log  <-- change this default if you wish, but at least note the location of the log file
+  ...
+
+
+
+  In order to configure the gemengine configuration must be added to /etc/Chrystoki.conf which needs to be create if not present.
+
+  See EXAMPLE 5 inside of README-GEM-CONFIG for an example of how to configure the gemengine for KeySecure.
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

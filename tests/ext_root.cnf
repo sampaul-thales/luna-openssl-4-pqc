@@ -1,0 +1,8 @@
+extensions = x509v3
+[ x509v3 ]
+basicConstraints=CA:true,pathlen:1
+keyUsage=keyCertSign
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid:always,issuer
+#subjectAltName=email:copy
+#issuerAltName=issuer:copy

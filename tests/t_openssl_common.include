@@ -1,0 +1,90 @@
+#!/bin/false
+##############################################################################
+#
+# This file is part of the "Luna OpenSSL for PQC" project.
+#
+# The " Luna OpenSSL for PQC " project is provided under the MIT license (see the
+# following Web site for further details: https://mit-license.org/ ).
+#
+# Copyright © 2024 Thales Group
+#
+##############################################################################
+
+#
+# makefile definitions for tests named "t_openssl_<algorithm>"
+#
+
+#
+# provider
+#
+
+# software provider:
+# classic algorithms (implicit provider via openssl.cnf)
+#SW_PROVIDER =
+# classic algorithms (explicit provider)
+#SW_PROVIDER = -provider default
+# pqc testing with oqs provider
+#SW_PROVIDER = -provider default -provider oqsprovider
+# pqc testing with luna provider
+SW_PROVIDER = -provider lunaprov -provider default
+
+# hardware provider:
+# classic algorithms (implicit provider via openssl.cnf)
+#HW_PROVIDER =
+# classic algorithms (explicit provider)
+#HW_PROVIDER = -provider default
+# pqc testing with oqs provider
+#HW_PROVIDER = -provider default -provider oqsprovider
+# pqc testing with luna provider
+HW_PROVIDER = -provider lunaprov -provider default
+
+#
+# keyform
+#
+
+SW_KEYFORM =
+HW_KEYFORM =
+
+#
+# engine
+#
+
+# force software keys
+#SW_ENGINE = $(SW_PROVIDER)
+#HW_ENGINE = $(SW_PROVIDER)
+
+# if openssl3 then
+  # if openssl3 provider then
+    SW_ENGINE = $(SW_PROVIDER)
+    HW_ENGINE = $(HW_PROVIDER)
+    HW_KEYFORM =
+  # else if openssl3 engine then
+    #SW_ENGINE = $(SW_PROVIDER)
+    #HW_ENGINE = $(SW_PROVIDER) -engine gem
+    #HW_KEYFORM = -keyform ENGINE
+  # endif
+# else
+  #SW_ENGINE =
+  #HW_ENGINE = -engine gem
+  #HW_KEYFORM = -keyform ENGINE
+# endif
+
+
+#
+# default digest to use
+#
+
+#BASE_MD=sha1
+#BASE_MD=sha224
+# NOTE: sha256 is the default though you should try to vary the digest to prove that
+# the engine/provider works when specifying other digests and specifying no digest
+BASE_MD=sha256
+#BASE_MD=sha384
+#BASE_MD=sha512
+#BASE_MD=sha3-224
+#BASE_MD=sha3-256
+#BASE_MD=sha3-384
+#BASE_MD=sha3-512
+
+#eof
+

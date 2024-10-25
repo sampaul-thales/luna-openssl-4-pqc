@@ -1,0 +1,17 @@
+#!/bin/false
+
+*.keep.*
+eckey.pem
+foo.txt
+log*.log
+mail.msg
+message.*
+plain.*
+sendmail.msg
+tmp.*
+tmpdsa.*
+tmpec.*
+tmppqc.*
+
+# eof
+

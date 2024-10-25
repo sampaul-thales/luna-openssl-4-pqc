@@ -1,0 +1,78 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+README-ECDSA
+
+
+  The following steps show how to manipulate ECDSA keys
+  using utilities 'sautil' and 'openssl'.
+  
+  sautil and openssl have locations that depend on steps followed in "README-GEMBUILD".
+
+  The Gem HSM middleware is configured according to file "README-GEM-CONFIG".
+
+
+
+INSTRUCTIONS
+
+
+  NOTE:  Ensure that the line "DisableEcdsa = 0;" is in the GemEngine section of the Chrystoki.conf file.  The default value is 1.
+         See README-GEM-CONFIG for details.
+
+
+  STEP 1. Open connection (and login).
+
+    # sautil -v -s 1 -i 10:11 -o -q
+
+    NOTE: you should select a different value than "10:11"
+      to customize your application environment.
+      And you may select a different slot number than "1".
+
+
+  STEP 2a. Generate keypair and keyfile (if using sautil to specify curve).
+
+    # sautil -v -s 1 -i 10:11 -m OID_X9_62_prime256v1 -f tmpkey.pem
+
+
+or, STEP 2b. Generate keypair and keyfile (if using openssl to specify curve).
+
+    # openssl ecparam -out ecparam.pem -name prime256v1
+
+    # sautil -v -s 1 -i 10:11 -m OID_:ecparam.pem -f tmpkey.pem
+
+
+or, STEP 2c. Generate keyfile (from existing key).
+
+    # sautil -v -s 1 -i 10:11 -a 0:ECDSA -f tmpkey.pem
+
+
+  STEP 3. Sign some data; e.g., sign a certificate request and verify the signature.
+
+    # openssl req -engine gem -new -nodes -key tmpkey.pem -out tmpkey.req -days 30 -verify
+
+
+  STEP 4. Close connection (and logout).
+
+    # sautil -v -s 1 -i 10:11 -c
+
+
+
+For more help, run command "sautil -h".
+
+If using sautil to specify curve, run command "sautil -n" for more curve names.
+
+If using openssl to specify curve, run command "openssl ecparam -list_curves"
+for more curve names.
+
+Note: not all curves will work.  However, if a curve is
+ described both in sautil and in openssl then likely
+ it will work throughout this entire toolchain.
+
+To import keys from other toolchains, use the
+certificate management utility ("cmu") provided
+with the main product release.
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

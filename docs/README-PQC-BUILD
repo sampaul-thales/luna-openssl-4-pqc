@@ -1,0 +1,180 @@
+Copyright (c) 2022-2023 Thales Group. All rights reserved.
+
+
+
+PURPOSE
+
+  The gembuild script is centered around integrating the Thales Luna Crypto Provider for OpenSSL 3.2.
+
+  There are various integration scenarios including:
+    (A) install the pre-built provider and utilities
+    (B) or, build and install the provider and utilities from source
+    (C) or, build and install everything (OpenSSL, provider and utilities) from source
+
+  For more information, see the help page of the gembuild script; i.e., './gembuild --help'.
+
+
+---------------------------------------------------------------------------------------------------
+SCENARIO (A) - install the pre-built provider and utilities
+
+
+  STEP 1. Locate the files 'lunaprov.so' and 'sautil'.
+
+    See sub-folder 'builds/linux/<flavour>/<bits>/<stream>', and select the
+    flavour of linux (e.g., rhel), number of bits (e.g., 64) and the OpenSSL stream (e.g., 3.2).
+
+    Command 'which openssl' indicates the path to the default openssl binary.
+    If the path is incorrect, fix the environment variables 'PATH' and 'LD_LIBRARY_PATH'.
+
+    Command 'openssl version' indicates the stream.
+
+
+  STEP 2. Locate the directory where OpenSSL modules are installed.
+
+    Run command:
+
+      # ./gembuild locate-providers
+
+    Example output:
+
+      The openssl providers directory is located at:
+
+      /usr/lib64/openssl/ossl-modules
+
+
+  STEP 3. Copy the luna provider 'lunaprov.so' to the modules directory and test.
+
+    Run commands:
+
+      # cp builds/linux/rhel/64/3.2/lunaprov.so /usr/lib64/openssl/ossl-modules
+
+      # openssl list -provider lunaprov -provider default -providers
+
+    Example output:
+
+      Providers:
+        default
+          name: OpenSSL Default Provider
+          version: 3.2.0
+          status: active
+        lunaprov
+          name: Thales Luna Provider
+          version: 1.6.0
+          status: active
+
+
+  STEP 4. Copy the utility 'sautil' and test.
+
+    Run commands:
+
+      # cp builds/linux/rhel/64/3.2/sautil /usr/local/bin
+
+      # sautil -h
+
+
+
+---------------------------------------------------------------------------------------------------
+SCENARIO (B) - build and install the provider and utilities from source
+
+
+  PREREQUISITE:
+
+    Ensure that your system has an appropriate C compiler installed (gcc 8 or higher) and make.
+
+
+  STEP 1. Download and extract OpenSSL source tarball.  Get the version that is close to your existing OpenSSL instalation (run "openssl version").
+
+    Example:
+
+    Download openssl-3.2.0.tar.gz from https://www.openssl.org/source/
+
+    # tar xvfz openssl-3.2.0.tar.gz
+
+
+  STEP 2. Locate the directory where OpenSSL modules are installed.
+
+    # ./gembuild locate-providers
+
+
+  STEP 3. Run gembuild config
+
+    Example:
+    # ./gembuild config --openssl-source=/home/username/openssl-3.2.0 --openssl-providers=/usr/lib64/openssl/ossl-modules --config-bits=64
+
+    NOTE: This assumes that the openssl headers directory is located in /usr/include.  It may be necessary to install the openssl development package.
+          If the header files are located in a different location, the --openssl-includes option can be used.  As well, the --openssl-libs options can
+          be used to specify the location of the lib directory with libcrypto.so.  All paths need to be absolute.
+
+    NOTE: It is possible to use the header files from the downloaded source.  In order to do so, pass the --use-source-headers option
+          to the "./gembuild config" command.
+
+
+  STEP 4. Compile and install provider.
+
+    # ./gembuild provider-build
+
+    # ./gembuild provider-install
+
+
+  STEP 5. Compile and install sautil.
+
+    # ./gembuild sautil-build
+
+    # ./gembuild sautil-install
+
+
+
+---------------------------------------------------------------------------------------------------
+SCENARIO (C) - build and install everything (OpenSSL, provider and utilities) from source
+
+
+  STEP 1. Download and extract OpenSSL source tarball.
+
+    Example:
+
+    Download openssl-3.2.0.tar.gz from https://www.openssl.org/source/
+
+    # tar xvfz openssl-3.2.0.tar.gz
+
+
+  STEP 2. Run gembuild config using the --prefix option.
+
+    Example:
+    # ./gembuild config --openssl-source=/home/username/openssl-3.2.0 --prefix=/usr/local --config-bits=64
+
+
+  STEP 3. Compile and install OpenSSL.
+
+    # ./gembuild openssl-build
+
+    # ./gembuild openssl-install
+
+
+  STEP 4. Compile and install provider.
+
+    # ./gembuild provider-build
+
+    # ./gembuild provider-install
+
+
+  STEP 5. Compile and install sautil.
+
+    # ./gembuild sautil-build
+
+    # ./gembuild sautil-install
+
+
+  STEP 6. Customize PATH to include path to openssl and sautil.
+
+    Example:
+    # export PATH=/usr/local/ssl/bin:/usr/local/sautil/bin:$PATH
+
+
+  STEP 7. Customize LD_LIBRARY_PATH to include path to 'libcrypto.so'.
+
+    Example:
+    # export LD_LIBRARY_PATH=/usr/local/ssl/lib:$LD_LIBRARY_PATH
+
+
+
+Copyright (c) 2022-2023 Thales Group. All rights reserved.

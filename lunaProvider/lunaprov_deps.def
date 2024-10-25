@@ -1,0 +1,315 @@
+
+
+;
+; This file is part of the "Luna OpenSSL for PQC" project.
+;
+; The " Luna OpenSSL for PQC " project is provided under the MIT license (see the
+; following Web site for further details: https://mit-license.org/ ).
+;
+; Copyright © 2024 Thales Group
+;
+
+LIBRARY "lunaprov_deps"
+
+EXPORTS
+  ossl_prov_is_running
+  ossl_rsa_digestinfo_encoding
+  ossl_rsa_check_key
+  ossl_ec_check_key
+  ossl_dsa_check_key
+
+  ossl_rsa_to_PKCS1_der_encoder_functions
+  ossl_rsa_to_PKCS1_pem_encoder_functions
+  ossl_rsa_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_rsa_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_rsa_to_PrivateKeyInfo_der_encoder_functions
+  ossl_rsa_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_rsa_to_RSA_der_encoder_functions
+  ossl_rsa_to_RSA_pem_encoder_functions
+  ossl_rsa_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_rsa_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_rsa_to_msblob_encoder_functions
+  ossl_rsa_to_pvk_encoder_functions
+  ossl_rsa_to_text_encoder_functions
+  ossl_rsa_to_type_specific_keypair_der_encoder_functions
+  ossl_rsa_to_type_specific_keypair_pem_encoder_functions
+  ossl_rsapss_to_PKCS1_der_encoder_functions
+  ossl_rsapss_to_PKCS1_pem_encoder_functions
+  ossl_rsapss_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_rsapss_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_rsapss_to_PrivateKeyInfo_der_encoder_functions
+  ossl_rsapss_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_rsapss_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_rsapss_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_rsapss_to_text_encoder_functions
+
+  ossl_dh_to_DH_der_encoder_functions
+  ossl_dh_to_DH_pem_encoder_functions
+  ossl_dh_to_PKCS3_der_encoder_functions
+  ossl_dh_to_PKCS3_pem_encoder_functions
+  ossl_dh_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_dh_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_dh_to_PrivateKeyInfo_der_encoder_functions
+  ossl_dh_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_dh_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_dh_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_dh_to_type_specific_params_der_encoder_functions
+  ossl_dh_to_type_specific_params_pem_encoder_functions
+  ossl_dh_to_text_encoder_functions
+  ossl_dhx_to_DHX_der_encoder_functions
+  ossl_dhx_to_DHX_pem_encoder_functions
+  ossl_dhx_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_dhx_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_dhx_to_PrivateKeyInfo_der_encoder_functions
+  ossl_dhx_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_dhx_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_dhx_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_dhx_to_X9_42_der_encoder_functions
+  ossl_dhx_to_X9_42_pem_encoder_functions
+  ossl_dhx_to_type_specific_params_der_encoder_functions
+  ossl_dhx_to_type_specific_params_pem_encoder_functions
+  ossl_dhx_to_text_encoder_functions
+
+  ossl_dsa_to_DSA_der_encoder_functions
+  ossl_dsa_to_DSA_pem_encoder_functions
+  ossl_dsa_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_dsa_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_dsa_to_PrivateKeyInfo_der_encoder_functions
+  ossl_dsa_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_dsa_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_dsa_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_dsa_to_type_specific_pem_encoder_functions
+  ossl_dsa_to_type_specific_der_encoder_functions
+  ossl_dsa_to_msblob_encoder_functions
+  ossl_dsa_to_pvk_encoder_functions
+  ossl_dsa_to_text_encoder_functions
+
+  ossl_ec_to_EC_der_encoder_functions
+  ossl_ec_to_EC_pem_encoder_functions
+  ossl_ec_to_blob_encoder_functions
+  ossl_ec_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_ec_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_ec_to_PrivateKeyInfo_der_encoder_functions
+  ossl_ec_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_ec_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_ec_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_ec_to_X9_62_der_encoder_functions
+  ossl_ec_to_X9_62_pem_encoder_functions
+  ossl_ec_to_type_specific_no_pub_pem_encoder_functions
+  ossl_ec_to_type_specific_no_pub_der_encoder_functions
+  ossl_ec_to_text_encoder_functions
+
+  ossl_sm2_to_blob_encoder_functions
+  ossl_sm2_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_sm2_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_sm2_to_PrivateKeyInfo_der_encoder_functions
+  ossl_sm2_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_sm2_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_sm2_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_sm2_to_type_specific_no_pub_pem_encoder_functions
+  ossl_sm2_to_type_specific_no_pub_der_encoder_functions
+  ossl_sm2_to_text_encoder_functions
+
+  ossl_ed25519_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_ed25519_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_ed25519_to_PrivateKeyInfo_der_encoder_functions
+  ossl_ed25519_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_ed25519_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_ed25519_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_ed25519_to_text_encoder_functions
+
+  ossl_ed448_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_ed448_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_ed448_to_PrivateKeyInfo_der_encoder_functions
+  ossl_ed448_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_ed448_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_ed448_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_ed448_to_text_encoder_functions
+
+  ossl_x25519_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_x25519_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_x25519_to_PrivateKeyInfo_der_encoder_functions
+  ossl_x25519_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_x25519_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_x25519_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_x25519_to_text_encoder_functions
+
+  ossl_x448_to_EncryptedPrivateKeyInfo_der_encoder_functions
+  ossl_x448_to_EncryptedPrivateKeyInfo_pem_encoder_functions
+  ossl_x448_to_PrivateKeyInfo_der_encoder_functions
+  ossl_x448_to_PrivateKeyInfo_pem_encoder_functions
+  ossl_x448_to_SubjectPublicKeyInfo_der_encoder_functions
+  ossl_x448_to_SubjectPublicKeyInfo_pem_encoder_functions
+  ossl_x448_to_text_encoder_functions
+
+  ossl_PrivateKeyInfo_der_to_dh_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_dh_decoder_functions
+  ossl_type_specific_params_der_to_dh_decoder_functions
+  ossl_DH_der_to_dh_decoder_functions
+  ossl_PrivateKeyInfo_der_to_dhx_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_dhx_decoder_functions
+  ossl_type_specific_params_der_to_dhx_decoder_functions
+  ossl_DHX_der_to_dhx_decoder_functions
+  ossl_PrivateKeyInfo_der_to_dsa_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_dsa_decoder_functions
+  ossl_type_specific_der_to_dsa_decoder_functions
+  ossl_DSA_der_to_dsa_decoder_functions
+  ossl_msblob_to_dsa_decoder_functions
+  ossl_pvk_to_dsa_decoder_functions
+  ossl_PrivateKeyInfo_der_to_ec_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_ec_decoder_functions
+  ossl_type_specific_no_pub_der_to_ec_decoder_functions
+  ossl_EC_der_to_ec_decoder_functions
+  ossl_PrivateKeyInfo_der_to_x25519_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_x25519_decoder_functions
+  ossl_PrivateKeyInfo_der_to_x448_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_x448_decoder_functions
+  ossl_PrivateKeyInfo_der_to_ed25519_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_ed25519_decoder_functions
+  ossl_PrivateKeyInfo_der_to_ed448_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_ed448_decoder_functions
+  ossl_PrivateKeyInfo_der_to_sm2_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_sm2_decoder_functions
+  ossl_PrivateKeyInfo_der_to_rsa_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_rsa_decoder_functions
+  ossl_type_specific_keypair_der_to_rsa_decoder_functions
+  ossl_RSA_der_to_rsa_decoder_functions
+  ossl_msblob_to_rsa_decoder_functions
+  ossl_pvk_to_rsa_decoder_functions
+  ossl_PrivateKeyInfo_der_to_rsapss_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_rsapss_decoder_functions
+  ossl_EncryptedPrivateKeyInfo_der_to_der_decoder_functions
+  ossl_SubjectPublicKeyInfo_der_to_der_decoder_functions
+  ossl_pem_to_der_decoder_functions
+
+  ossl_prov_ctx_get0_libctx
+
+  ossl_prov_bio_from_dispatch
+  ossl_bio_prov_init_bio_method
+  ossl_bio_new_from_core_bio
+  ossl_prov_seeding_from_dispatch
+  ossl_decoder_from_algorithm
+  ossl_decoder_instance_new
+  ossl_decoder_instance_free
+  ossl_decoder_ctx_add_decoder_inst
+  ossl_any_to_obj_algorithm
+
+  ossl_rsa_get0_pss_params_30
+  ossl_rsa_pss_params_30_set_defaults
+  ossl_rsa_pss_params_30_is_unrestricted
+  ossl_rsa_pss_params_30_set_hashalg
+  ossl_rsa_pss_params_30_set_maskgenhashalg
+  ossl_rsa_pss_params_30_set_saltlen
+  ossl_rsa_pss_params_30_hashalg
+  ossl_rsa_pss_params_30_maskgenhashalg
+  ossl_rsa_pss_params_30_saltlen
+  ossl_rsa_oaeppss_nid2name
+  ossl_rsa_verify
+
+  WPACKET_init_der
+  WPACKET_finish
+  WPACKET_get_total_written
+  WPACKET_get_curr
+  WPACKET_cleanup
+
+  ossl_DER_w_algorithmIdentifier_RSA_PSS
+  ossl_DER_w_algorithmIdentifier_MDWithRSAEncryption
+  ossl_rsa_padding_check_PKCS1_type_2_TLS
+  ossl_rsa_padding_add_PKCS1_OAEP_mgf1_ex
+  ossl_DER_w_algorithmIdentifier_ECDSA_with_MD
+  ossl_DER_w_algorithmIdentifier_DSA_with_MD
+
+  ossl_rsa_pss_params_30_copy
+  ossl_rsa_new_with_ctx
+  ossl_rsa_get0_libctx
+  ossl_rsa_dup
+  ossl_rsa_todata
+  ossl_rsa_fromdata
+  ossl_rsa_pss_params_30_todata
+  ossl_rsa_pss_params_30_fromdata
+  ossl_rsa_validate_public
+  ossl_rsa_validate_private
+  ossl_rsa_validate_pairwise
+
+  ossl_ec_key_public_check
+  ossl_ec_key_public_check_quick
+  ossl_ec_key_private_check
+  ossl_ec_key_pairwise_check
+  ossl_ec_key_get_libctx
+  ossl_ec_key_get0_propq
+  ossl_ec_group_todata
+  ossl_ec_group_fromdata
+  ossl_ec_group_set_params
+  ossl_ec_key_fromdata
+  ossl_ec_key_otherparams_fromdata
+  ossl_ec_key_dup
+  ossl_ec_set_ecdh_cofactor_mode
+  ossl_ec_encoding_name2id
+  ossl_ec_pt_format_name2id
+  ossl_ec_pt_format_id2name
+  ossl_ec_check_group_type_id2name
+  ossl_ec_set_check_group_type_from_name
+
+  ossl_param_build_set_int
+  ossl_param_build_set_utf8_string
+  ossl_param_build_set_octet_string
+  ossl_param_build_set_bn
+  ossl_param_build_set_bn_pad
+
+  ossl_sm2_key_private_check
+
+  ossl_ffc_params_set_seed
+  ossl_ffc_params_set_gindex
+  ossl_ffc_params_set_pcounter
+  ossl_ffc_params_set_h
+  ossl_ffc_params_enable_flags
+  ossl_ffc_set_digest
+  ossl_ffc_params_copy
+  ossl_ffc_params_cmp
+  ossl_ffc_params_todata
+
+  ossl_dsa_new
+  ossl_dsa_generate_ffc_parameters
+  ossl_dsa_get0_params
+  ossl_dsa_ffc_params_fromdata
+  ossl_dsa_key_fromdata
+  ossl_dsa_check_params
+  ossl_dsa_check_pub_key
+  ossl_dsa_check_priv_key
+  ossl_dsa_check_pairwise
+  ossl_dsa_dup
+
+  ossl_do_blob_header
+  ossl_blob_length
+  ossl_do_PVK_header
+
+  ossl_digest_get_approved_nid_with_sha1
+  ossl_digest_rsa_sign_get_md_nid
+
+  ossl_digest_is_allowed
+  ossl_ecdh_kdf_X9_63
+  
+  ossl_type_specific_no_pub_der_to_sm2_decoder_functions
+
+  ossl_ecx_key_free
+  ossl_ecx_key_up_ref
+  ossl_ed25519_sign
+  ossl_ed25519_verify
+  ossl_ed448_sign
+  ossl_ed448_verify
+  ossl_DER_w_algorithmIdentifier_ED25519
+  ossl_DER_w_algorithmIdentifier_ED448
+  ossl_ecx_key_new
+  ossl_ecx_key_allocate_privkey
+  ossl_ecx_key_dup
+  ossl_x25519_public_from_private
+  ossl_ed25519_public_from_private
+  ossl_ed448_public_from_private
+  ossl_x448_public_from_private
+  ossl_ecx_key_fromdata
+  ossl_ecx_compute_key
+  ossl_evp_pkey_get1_X25519
+  ossl_evp_pkey_get1_X448
+  ossl_evp_pkey_get1_ED25519
+  ossl_evp_pkey_get1_ED448
+  ossl_ecx_dhkem_derive_private

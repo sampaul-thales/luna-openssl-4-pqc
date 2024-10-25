@@ -1,0 +1,39 @@
+#!/bin/false
+##############################################################################
+#
+# This file is part of the "Luna OpenSSL for PQC" project.
+#
+# The " Luna OpenSSL for PQC " project is provided under the MIT license (see the
+# following Web site for further details: https://mit-license.org/ ).
+#
+# Copyright © 2024 Thales Group
+#
+##############################################################################
+
+INCLUDES=%INCLUDES%
+LIBS=%LIBS%
+CC=%CC%
+CFLAGS=%CFLAGS%
+INCLUDES=%INCLUDES%
+DEFINES=%DEFINES%
+LD=%LD%
+LDFLAGS=%LDFLAGS%
+LDEXTRA=%LDEXTRA%
+LDSO=%LDSO%
+OBJECT=e_gem.o
+
+default: all
+
+all:
+	$(CC) $(CFLAGS) $(INCLUDES) $(DEFINES) -c -g -o $(OBJECT) e_gem.c
+	$(LD) $(LDFLAGS) -o $(LDSO) $(OBJECT) $(LDEXTRA) $(LIBS) -lcrypto
+	file $(LDSO)
+
+clean:
+	rm -f $(OBJECT)
+	rm -f $(LDSO)
+
+.PHONY: default all clean
+
+#eof
+

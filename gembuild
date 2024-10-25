@@ -1,0 +1,1742 @@
+#!/bin/sh
+##############################################################################
+#
+# This file is part of the "Luna OpenSSL for PQC" project.
+#
+# The " Luna OpenSSL for PQC " project is provided under the MIT license (see the
+# following Web site for further details: https://mit-license.org/ ).
+#
+# Copyright © 2024 Thales Group
+#
+##############################################################################
+#
+# Description:
+#   Script to build openssl, engine, sautil, liboqs, provider.
+#
+
+#
+# See the docs/README-GEMBUILD for some scenarios of usage.  Run "./gembuild --help"
+# for usage information.
+#
+
+SCRIPT_PATH="`dirname \"$0\"`"
+SCRIPT_PATH="`(cd \"$SCRIPT_PATH\" && pwd)`"
+cd $SCRIPT_PATH
+
+SCRIPT_NAME=gembuild
+################################################################
+# Configurable parameters
+# sautil with slot 1, with appId
+#SAUTILARG_PRE="-v -s 1 -i 10:11"
+#SAUTILARG_POST=""
+# sautil with slot 0, without appId
+SAUTILARG_PRE="-v -s 0 -i 0:0"
+SAUTILARG_POST="-o -q -c"
+RSAKEYSIZE=2048
+
+# Non-configurable parameters
+ENGINE=gem
+# openssl with engine
+ENGINE_OPTS="-engine $ENGINE -keyform ENGINE"
+# openssl3 with provider
+#ENGINE_OPTS="-provider lunaprov -provider default"
+
+################################################################
+WRITE_CONFIG=0
+OPENSSL_FIPS_BUILD=0
+OPENSSL_FIPS_INSTALL=0
+OPENSSL_BUILD=0
+OPENSSL_INSTALL=0
+OPENSSL_EC_HEADERS=0
+ENGINE_BUILD=0
+ENGINE_INSTALL=0
+PROVIDER_BUILD=0
+PROVIDER_INSTALL=0
+LIBOQS_BUILD=0
+LIBOQS_INSTALL=0
+SAUTIL_BUILD=0
+SAUTIL_INSTALL=0
+ENGINEPERF_BUILD=0
+SO_VERSION=0
+USE_SOURCE_HEADERS=0
+CONFIG_ONLY=0
+LOCATE_ENGINES=0
+UPDATE_ENGINES=0
+LOCATE_PROVIDERS=0
+UPDATE_PROVIDERS=0
+APACHE_BUILD=0
+APACHE_GENRSA=0
+APACHE_SOURCE=0
+APR_SOURCE=0
+APR_UTIL_SOURCE=0
+APR_ICONV_SOURCE=0
+DNSSEC_SOURCE=0
+DNSSEC_CLEANALL=0
+DNSSEC_CLEAN=0
+DNSSEC_MAKEALL=0
+DNSSEC_MAKEBIND=0
+
+# Define miscellaneous
+SAVEPATH="/usr/local/saved/"
+
+# select binaries: sautil, openssl (try generic location)
+SAUTILEXE=/usr/local/bin/sautil
+OPENSSLEXE=/usr/local/ssl/bin/openssl
+
+ENGINE_SO=libgem.so
+PROVIDER_SO=lunaprov.so
+
+CONFIG_IN=config.in
+
+SYSTEM=`(uname -s) 2>/dev/null`  || SYSTEM="unknown"
+MACHINE=`(uname -m) 2>/dev/null` || MACHINE="unknown"
+VERSION=`(uname -r) 2>/dev/null` || VERSION="unknown"
+DEFARCH=`(uname -p) 2>/dev/null` || DEFARCH="unknown"
+ARCH="unknown"
+
+LOGS=$SCRIPT_PATH/logs
+
+if [ ! -d $LOGS ]; then
+	mkdir $LOGS
+fi
+
+LOG=$LOGS/default.log
+
+
+# NOTE: "no-mdc2 no-rc5 no-idea" because those are patented.
+# NOTE: "no-asm no-krb5 no-zlib" for portability.
+# NOTE: "threads" because thread-safe is not default on AIX.
+# NOTE: "shared" for dynamic engine.
+# NOTE: "fipscanisterbuild" for fips module 2.0.
+# NOTE: "fips" for fips module 2.0.
+# NOTE: "enable-fips" for fips module 3.0.
+# NOTE: "enable-trace" for openssl 3.
+
+if [ -z "$OPENSSL_CONFIG_OPTIONS" ]; then
+	# NOTE: default options	that are likely to be portable: "shared threads no-asm"
+	OPENSSL_CONFIG_OPTIONS="shared threads no-asm"
+fi
+
+BASEDIR=$PWD
+
+###############
+#Displays usage
+###############
+usage()
+{
+echo "---------|---------|---------|---------|---------|---------|---------|---------|"
+echo
+echo "Usage:"
+echo
+echo "  ./$SCRIPT_NAME command options"
+echo 
+echo "  First run \"$SCRIPT_NAME config <options>\" specifying necessary options."
+echo
+echo "  Then run other commands (options are cached from config command)."
+echo
+echo "Commands for $SCRIPT_NAME:"
+echo
+echo "  help                        Display this usage"
+echo
+echo "  config                      Options that are passed in are saved to config.in"
+echo "                              and used in later $SCRIPT_NAME commands"
+echo
+echo "  openssl-fips-build          Build the FIPS module 2.0 (not 3.0) separately"
+echo "                              (--openssl-fips-source must be specified)"
+echo
+echo "  openssl-fips-install        Install the FIPS module 2.0 (not 3.0) separately"
+echo
+echo "  openssl-build               Configure and compile OpenSSL"
+echo
+echo "  openssl-install             Install OpenSSL"
+echo
+echo "  openssl-ec-headers          Copies certain EC headers needed to build dynamic" 
+echo "                              engine from the OpenSSL source to installed"
+echo "                              includes"
+echo
+echo "  engine-build                Builds the dynamic engine"
+echo
+echo "  engine-install              Installs the dynamic engine"
+echo
+echo "  provider-build              Builds the luna provider (openssl3)"
+echo
+echo "  provider-install            Installs the luna provider (openssl3)"
+echo
+echo "  sautil-build                Builds the sautil program"
+echo
+echo "  sautil-install              Installs the sautil program"
+echo
+echo "  engineperf-build            Builds the engineperf program"
+echo
+echo "  locate-engines              Locate the OpenSSL engines directory."
+echo "                              Pass -c to cache dir for --openssl-engines."
+echo
+echo "  locate-providers            Locate the OpenSSL providers directory (openssl3)."
+echo "                              Pass -c to cache dir for --openssl-providers ."
+echo
+echo "  apache-build                Builds the apache server"
+echo
+echo "  apache-genrsa               Generates RSA keys for apache server"
+echo
+echo "  dnssec-cleanall             Cleans all for dnssec source"
+echo
+echo "  dnssec-clean                Cleans bind"
+echo
+echo "  dnssec-makeall              Makes all for dnssec source"
+echo
+echo "  dnssec-makebind             Makes bind"
+echo
+echo "Mandatory Options:"
+echo
+echo "--openssl-source=<source>     Directory where the OpenSSL source has been"
+echo "                              extracted"
+echo
+echo "--config-bits=<value>         Can be 32, 64 or LEGACY."
+echo
+echo "  This overrides the default build behaviour"
+echo "  for platforms and compilers that support this override."
+echo
+echo "  32 means build 32-bit binaries (on platforms that can cross-compile);"
+echo "  e.g., Linux x64, Solaris."
+echo
+echo "  64 means build 64-bit binaries (on platforms that can cross-compile);"
+echo "  e.g., Linux x64, Solaris."
+echo
+echo "  LEGACY means default build behaviour (on platforms that build 32-bit only);"
+echo "  e.g., old Linux distributions where compiler does not recognize -m32 option."
+echo
+echo "Other Options:"
+echo
+echo "--prefix=<prefix>             Absolute path to prefix the ssl installation"
+echo "                              directory as well as sautil install."
+echo
+echo "--openssl-includes=<includes> Absolute path of installed OpenSSL includes.  "
+echo "                              Will default to <prefix>/ssl/include if --prefix"
+echo "                              used otherwise /usr/include."
+echo
+echo "--openssl-libs=<libs>          Path of installed OpenSSL libs.  Will be set"
+echo "                              to <prefix>/ssl/lib by default."
+echo
+echo "--openssl-engines=<engines>   Path of installed OpenSSL engines.  Will be set"
+echo "                              to <prefix>/ssl/lib/engines by default."
+echo
+echo "--openssl-api=<major>         Specify the openssl major version you are expecting"
+echo "                              the source code (and this script) to conform with."
+echo "                              Major versions include 1.0.2 or 1.1.1 or 3.0 ."
+echo
+echo "--fips-module=yes|no          Build the FIPS module where applicable."
+echo "                              Applies to openssl major version 1.0.2 or 3.0 ."
+echo "                              You should also specify option  --openssl-api=<major> ."
+echo
+echo "--openssl-fips-source=<src>   Path to OpenSSL FIPS module 2.0 (not 3.0) source."
+echo "                              If specified then FIPS will be built into OpenSSL."
+echo
+echo "--openssl-fips-prefix=<path>  Path to OpenSSL FIPS module 2.0 (not 3.0) install prefix."
+echo "                              If this option isn't specfied it will take the"
+echo "                              value of <prefix> from --prefix option.  If the"
+echo "                              --prefix option isn't used then it will default"
+echo "                              to /usr/local."
+echo
+echo "--openssl-target=<target>     Optionally specify the target the OpenSSL is to"
+echo "                              be configured with"
+echo
+echo "--use-source-headers          Use the includes for building the engine using"
+echo "                              the OpenSSL source tree."
+echo
+echo "--sautil-prefix=<path>        Path to prepend to the sautil binary.  Default"
+echo "                              value will be <prefix>/sautil/bin if --prefix"
+echo "                              option is used, otherwise /usr/local/bin."
+echo
+echo "--liboqs-prefix=<path>        Path to prepend to the liboqs directory.  Default"
+echo "                              value will be <prefix> if --prefix"
+echo "                              option is used, otherwise /usr/local."
+echo
+echo "--apache-source=<httpd-src>   Directory where the apache source has been"
+echo "                              extracted"
+echo
+echo "--apr-source=<apr-src>	    Directory where the apr source has been"
+echo "                              extracted"
+echo
+echo "--apr-iconv-source=<iconvsrc> Directory where the apr iconv source has been"
+echo "                              extracted"
+echo
+echo "--apr-util-source=<utilsrc>   Directory where the apr util source has been"
+echo "                              extracted"
+echo
+echo "--apache-keys-validity=<Days> Number of days Apache RSA keys will be valid"
+echo "                              for"
+echo
+}
+
+##########################
+#Logs and runs a command
+##########################
+log_run()
+{
+	COMMAND=$1
+	echo $COMMAND >> $LOG
+	$COMMAND 1>> $LOG 2>&1
+}
+
+##########################
+#Echoes and logs a message
+##########################
+log_echo()
+{
+	echo $1
+	echo $1 >> $LOG
+}
+
+
+##########################################
+#Clears all of the configuration variables
+##########################################
+clear_config()
+{
+	OPENSSL_SOURCE=""
+	LIBOQS_SOURCE=""
+	PREFIX=""
+   OPENSSL_ENGINES=""
+   OPENSSL_PROVIDERS=""
+	OPENSSL_LIBS=""
+	OPENSSL_INCLUDES=""
+	OPENSSL_TARGET=""
+	LUNA_CONFIG_BITS=""
+	OPENSSL_FIPS_SOURCE=""
+   OPENSSL_API="3.2"
+	FIPS_MODULE="yes"
+	SAUTIL_PREFIX=""
+	LIBOQS_PREFIX=""
+	OPENSSL_FIPS_PREFIX=""
+	APACHE_KEYS_VALIDITY="7305"
+	APACHE_SOURCE=""
+	APR_SOURCE=""
+	APR_UTIL_SOURCE=""
+	APR_ICONV_SOURCE=""
+}
+
+clear_config
+
+
+#if the configuration in file exists, source it
+if [ -f $CONFIG_IN ]; then
+	. ./$CONFIG_IN
+fi
+
+##################################################
+#Write the configuration settings to the config.in
+##################################################
+write_config()
+{
+	echo "Writing config settings to $CONFIG_IN"
+	if [ -f $CONFIG_IN ]; then
+		rm $CONFIG_IN
+	fi
+	echo "LUNA_CONFIG_BITS=\"$LUNA_CONFIG_BITS\"" >> $CONFIG_IN
+	echo "OPENSSL_SOURCE=\"$OPENSSL_SOURCE\"" >> $CONFIG_IN
+	echo "LIBOQS_SOURCE=\"$LIBOQS_SOURCE\"" >> $CONFIG_IN
+	echo "PREFIX=\"$PREFIX\"" >> $CONFIG_IN
+   echo "OPENSSL_ENGINES=\"$OPENSSL_ENGINES\"" >> $CONFIG_IN
+   echo "OPENSSL_PROVIDERS=\"$OPENSSL_PROVIDERS\"" >> $CONFIG_IN
+	echo "OPENSSL_LIBS=\"$OPENSSL_LIBS\"" >> $CONFIG_IN
+	echo "OPENSSL_INCLUDES=\"$OPENSSL_INCLUDES\"" >> $CONFIG_IN
+	echo "OPENSSL_FIPS_SOURCE=\"$OPENSSL_FIPS_SOURCE\"" >> $CONFIG_IN
+	echo "OPENSSL_TARGET=\"$OPENSSL_TARGET\"" >> $CONFIG_IN
+   echo "OPENSSL_API=\"$OPENSSL_API\"" >> $CONFIG_IN
+   echo "FIPS_MODULE=\"$FIPS_MODULE\"" >> $CONFIG_IN
+	echo "SAUTIL_PREFIX=\"$SAUTIL_PREFIX\"" >> $CONFIG_IN
+	echo "LIBOQS_PREFIX=\"$LIBOQS_PREFIX\"" >> $CONFIG_IN
+	echo "APACHE_KEYS_VALIDITY=\"$APACHE_KEYS_VALIDITY\"" >> $CONFIG_IN
+	echo "APACHE_SOURCE=\"$APACHE_SOURCE\"" >> $CONFIG_IN
+	echo "APR_SOURCE=\"$APR_SOURCE\"" >> $CONFIG_IN
+	echo "APR_UTIL_SOURCE=\"$APR_UTIL_SOURCE\"" >> $CONFIG_IN
+	echo "APR_ICONV_SOURCE=\"$APR_ICONV_SOURCE\"" >> $CONFIG_IN
+
+}
+
+################################################
+#LUNA_CONFIG_BITS defaults to 64 on x64_64 Linux
+################################################
+guess_config_bits()
+{
+	if [ "$SYSTEM" = "Linux" ]; then
+		if [ "$MACHINE" = "x86_64" ]; then
+			LUNA_CONFIG_BITS=64
+		else
+			LUNA_CONFIG_BITS=32
+		fi
+	fi
+}
+
+######################################
+#Determines the desired OpenSSL Target
+######################################
+set_openssl_target()
+{
+LUNA_CFG_TGT=solaris-sparcv7-cc
+LUNA_CFG_MXX=""
+if [ "$SYSTEM" = "SunOS" ]; then
+  LUNA_CFG_TGT=solaris-sparcv7-cc
+#  LUNA_CFG_TGT=solaris-sparcv7-gcc
+  if [ "$DEFARCH" = "sparc" ] ; then
+    LUNA_CFG_TGT=solaris-sparcv7-cc
+    if [ "$LUNA_CONFIG_BITS" = "64" ]; then
+      LUNA_CFG_TGT=solaris64-sparcv9-cc
+#      LUNA_CFG_TGT=solaris64-sparcv9-gcc
+    fi
+  fi
+  if [ "$DEFARCH" = "i386" ]; then
+    LUNA_CFG_TGT=solaris-x86-cc
+#    LUNA_CFG_TGT=solaris-x86-gcc
+    if [ "$LUNA_CONFIG_BITS" = "64" ]; then
+      LUNA_CFG_TGT=solaris64-x86_64-cc
+#      LUNA_CFG_TGT=solaris64-x86_64-gcc
+    fi
+  fi
+fi
+if [ "$SYSTEM" = "Linux" ]; then
+  LUNA_CFG_TGT=linux-generic32
+  if [ "$LUNA_CONFIG_BITS" = "64" ]; then
+    # NOTE: debug-linux-generic64 is recommended to debug runtime issues
+    # NOTE: debug is a problem for the builds (generate.sh), especially for openssl 1.0.2
+    LUNA_CFG_TGT=debug-linux-generic64
+    LUNA_CFG_MXX=-m64
+  fi
+  if [ "$LUNA_CONFIG_BITS" = "32" ]; then
+    # NOTE: debug-linux-generic32 is recommended to debug runtime issues
+    LUNA_CFG_TGT=debug-linux-generic32
+    LUNA_CFG_MXX=-m32
+  fi
+fi
+if [ "$SYSTEM" = "AIX" ]; then
+  LUNA_CFG_TGT=aix-cc
+#  LUNA_CFG_TGT=aix-gcc
+  LUNA_CFG_MXX=-lpthread
+  if [ "$LUNA_CONFIG_BITS" = "64" ]; then
+    LUNA_CFG_TGT=aix64-cc
+#    LUNA_CFG_TGT=aix64-gcc
+  fi
+fi
+if [ "$SYSTEM" = "HP-UX" ]; then
+  LUNA_CFG_TGT=hpux-ia64-cc
+#  LUNA_CFG_TGT=hpux-ia64-gcc
+  LUNA_CFG_MXX="no-asm +DAportable"
+  if [ "$MACHINE" = "ia64" ] ; then
+    LUNA_CFG_TGT=hpux-ia64-cc
+#    LUNA_CFG_TGT=hpux-ia64-gcc
+    if [ "$LUNA_CONFIG_BITS" = "64" ]; then
+      LUNA_CFG_TGT=hpux64-ia64-cc
+#      LUNA_CFG_TGT=hpux64-ia64-gcc
+    fi
+  else
+    LUNA_CFG_TGT=hpux-parisc1_0-cc
+#    LUNA_CFG_TGT=hpux-parisc-cc
+#    LUNA_CFG_TGT=hpux-parisc-gcc
+    if [ "$LUNA_CONFIG_BITS" = "64" ]; then
+      LUNA_CFG_TGT=hpux64-parisc2-cc
+#      LUNA_CFG_TGT=hpux64-parisc2-gcc
+    fi
+  fi
+fi
+}
+
+###########################################
+#Perform a build of the OpenSSL FIPS module
+###########################################
+openssl_fips_build()
+{
+
+	LOG=$LOGS/openssl-fips-build.log
+
+	if [ -f $LOG ]; then
+		rm $LOG
+	fi
+
+	if [ -z "$OPENSSL_FIPS_SOURCE" ]; then
+		log_echo "ERROR: --openssl-fips-source must be set in order to build FIPS module"
+		exit 1
+	fi
+
+	log_echo "Building OpenSSL FIPS module at: $OPENSSL_FIPS_SOURCE."
+	echo "Output logged to: $LOG."
+	cd $OPENSSL_FIPS_SOURCE
+	set_openssl_target
+	if [ -z "$OPENSSL_TARGET" ]; then
+		LUNA_CFG_TGT=$OPENSSL_TARGET
+	fi
+	perl Configure  $LUNA_CFG_TGT  fipscanisterbuild  $OPENSSL_CONFIG_OPTIONS  --prefix=$OPENSSL_FIPS_PREFIX"/ssl-fips/" --openssldir=$PREFIX"/ssl-fips/" $LUNA_CFG_MXX 1>> $LOG 2>&1
+	make clean 1>> $LOG 2>&1
+	make 1>> $LOG 2>&1
+	if [ $? -ne 0 ]; then
+		echo
+		log_echo "ERROR: There was an error compiling the FIPS module.  See $LOG for details."
+		echo
+		exit 1
+	else
+		log_echo "Successfully completed compiling the OpenSSL FIPS module."
+	fi
+	cd $BASEDIR
+}
+
+#############################
+#Installs OpenSSL FIPS module
+#############################
+openssl_fips_install()
+{
+
+	LOG=$LOGS/openssl-fips-install.log
+
+	if [ -f $LOG ]; then
+		rm $LOG
+	fi
+
+	if [ -z "$OPENSSL_FIPS_SOURCE" ]; then
+		log_echo "ERROR: --openssl-fips-source must be set in order to install FIPS module"
+		exit 1
+	fi
+
+	log_echo "Installing OpenSSL FIPS module from: $OPENSSL_FIPS_SOURCE."
+	echo "Output logged to: $LOG."
+
+	if [ -d $OPENSSL_FIPS_PREFIX/ssl-fips ]; then
+		DATEPATH=`date +%Y%m%d%H%M%S`
+		mv $OPENSSL_FIPS_PREFIX/ssl-fips $OPENSSL_FIPS_PREFIX/ssl-fips-$DATEPATH
+	fi
+
+	cd $OPENSSL_FIPS_SOURCE
+	make install 1> $LOG 2>&1
+	if [ $? -ne 0 ]; then
+		echo
+		log_echo "ERROR: There was an error installing the FIPS module.  See $LOG for details."
+		echo
+		exit 1
+	else
+		log_echo "Successfully installed FIPS module to: $OPENSSL_FIPS_PREFIX/ssl-fips."
+	fi
+	cd $BASEDIR
+}
+
+########################################
+#Performs a build of OpenSSL from source
+########################################
+openssl_build()
+{
+
+	LOG=$LOGS/openssl-build.log
+
+	if [ -f $LOG ]; then
+		rm $LOG
+	fi
+
+	log_echo "Building OpenSSL from source: $OPENSSL_SOURCE."
+	echo "Output logged to: $LOG."
+
+	cd $OPENSSL_SOURCE
+
+	log_echo "Changing default bits from 1024 to 2048."
+	if [ -f apps/openssl.cnf ]; then
+		sed -e "s/1024/2048/" apps/openssl.cnf > apps/openssl.cnf.2048
+		mv -f apps/openssl.cnf.2048 apps/openssl.cnf
+	fi
+	if [ -f apps/openssl-vms.cnf ]; then
+		sed -e "s/1024/2048/" apps/openssl-vms.cnf > apps/openssl-vms.cnf.2048
+		mv -f apps/openssl-vms.cnf.2048 apps/openssl-vms.cnf	
+	fi
+
+	set_openssl_target
+	if [ -z "$OPENSSL_TARGET" ]; then
+		LUNA_CFG_TGT=$OPENSSL_TARGET
+	fi
+
+   if [ "$OPENSSL_API" = "3.0" -o "$OPENSSL_API" = "3.2" ]; then
+     # NOTE: enable-trace is recommended to debug runtime issues
+     if [ "$FIPS_MODULE" = "yes" ]; then
+		log_echo "Configuring OpenSSL with FIPS Object Module 3.0."
+		log_run "perl config"
+		log_run "perl Configure  $LUNA_CFG_TGT  enable-fips enable-trace  $OPENSSL_CONFIG_OPTIONS  --prefix=$PREFIX"/ssl/"     --openssldir=$PREFIX"/ssl/"     $LUNA_CFG_MXX "
+     else
+      log_echo "Configuring OpenSSL without FIPS Object Module 3.0."
+      log_run "perl config"
+      log_run "perl Configure  $LUNA_CFG_TGT              enable-trace  $OPENSSL_CONFIG_OPTIONS  --prefix=$PREFIX"/ssl/"     --openssldir=$PREFIX"/ssl/"     $LUNA_CFG_MXX "
+     fi
+   else
+	  if [ "$OPENSSL_API" = "1.0.2" ]; then
+		log_echo "Configuring OpenSSL with FIPS Object Module 2.0."
+		log_run "perl config"
+		log_run "perl Configure  $LUNA_CFG_TGT  fips      $OPENSSL_CONFIG_OPTIONS  --prefix=$PREFIX"/ssl/"     --openssldir=$PREFIX"/ssl/"     $LUNA_CFG_MXX --with-fipsdir=$OPENSSL_FIPS_PREFIX"/ssl-fips/""
+	  else
+		log_echo "Configuring OpenSSL without FIPS."
+		log_run "perl config"
+		log_run "perl Configure  $LUNA_CFG_TGT            $OPENSSL_CONFIG_OPTIONS  --prefix=$PREFIX"/ssl/"     --openssldir=$PREFIX"/ssl/"     $LUNA_CFG_MXX"
+	  fi
+   fi
+
+	if [ "$CONFIG_ONLY" = "0" ]; then
+
+		log_echo "Compiling OpenSSL from source."
+
+		make clean 1>> $LOG 2>&1
+
+		make depend 1>> $LOG 2>&1
+
+		if [ ! "$SO_VERSION" = "0" ]; then
+			make LIBVERSION=$SO_VERSION 1>> $LOG 2>&1
+		else
+			make 1>> $LOG 2>&1
+		fi
+
+		if [ $? -ne 0 ]; then
+			log_echo "ERROR:  There was an issue compiling OpenSSL.  See $LOG for details."
+			echo
+			exit 1
+		fi
+
+		cd $BASEDIR
+
+		openssl=$OPENSSL_SOURCE/apps/openssl
+		if [ ! -f "$openssl" ]; then
+			echo
+			log_echo "ERROR: openssl executable was not found at $openssl.  The compilation was not successful.  See $LOG for details."
+			echo
+			exit 1
+		fi
+		VERSION="`LD_LIBRARY_PATH=$OPENSSL_SOURCE $openssl version 2> /dev/null`"
+		if [ $? -ne 0 ]; then
+			echo
+			log_echo "ERROR: The executable at $openssl did not exit properly."
+			echo
+			exit 1
+		fi
+		log_echo "Successfully completed compiling OpenSSL version: $VERSION."
+	fi
+}
+
+#################
+#Installs OpenSSL
+#################
+openssl_install()
+{
+
+	LOG=$LOGS/openssl-install.log
+
+	if [ -f $LOG ]; then
+		rm $LOG
+	fi
+
+	log_echo "Installing OpenSSL from $OPENSSL_SOURCE to $PREFIX/ssl."
+	cd $OPENSSL_SOURCE
+
+	if [ -d $PREFIX/ssl ]; then
+		DATEPATH=`date +%Y%m%d%H%M%S`
+		mv $PREFIX/ssl $PREFIX/ssl-$DATEPATH
+	fi
+
+	echo "Output logged to: $LOG."
+
+	if [ ! "$SO_VERSION" = "0" ]; then
+		#make install LIBVERSION=$SO_VERSION SHLIB_EXT=.so.$SO_VERSION 1>> $LOG 2>&1
+		make install_sw install_ssldirs install_fips LIBVERSION=$SO_VERSION SHLIB_EXT=.so.$SO_VERSION 1>> $LOG 2>&1
+	else
+		#make install 1>> $LOG 2>&1
+		make install_sw install_ssldirs install_fips 1>> $LOG 2>&1
+	fi
+
+	if [ $? -ne 0 ]; then
+		log_echo "ERROR:  There was an issue installing OpenSSL.  See $LOG for details."
+		echo
+		exit 1
+	fi
+
+	cd $BASEDIR
+
+	openssl=$PREFIX/ssl/bin/openssl
+	if [ ! -f "$openssl" ]; then
+		echo
+		log_echo "ERROR: openssl executable was not found at $openssl.  There was an issue installing it.  See $LOG for details."
+		echo
+		exit 1
+	fi
+	VERSION="`LD_LIBRARY_PATH=$OPENSSL_SOURCE $openssl version 2> /dev/null`"
+	if [ $? -ne 0 ]; then
+		echo
+		log_echo "ERROR: the executable at $openssl did not exit properly."
+		echo
+		exit 1
+	fi
+	log_echo "Successfully completed installing OpenSSL version: $VERSION."
+}
+
+
+copy_ec_header()
+{
+	cp $1 $2
+	if [ ! -f $2 ]; then
+		echo
+		echo "ERROR: Failed to copy $1 to $2."
+		echo
+		exit 1
+	fi
+}
+
+###########################################################################################
+#Installs necessary EC headers to the installed includes in order for gem engine to compile
+###########################################################################################
+# NOTE: copying file "ec_lcl.h" is not necessary for openssl 1.1.0 and above.
+# NOTE: file "ecs_locl.h" does not exist in openssl 1.1.0 and above.
+openssl_ec_headers()
+{
+	echo "Copying OpenSSL ec and ecdsa header files needed for the gemengine compilation."
+
+	if [ ! -d $OPENSSL_INCLUDES/openssl ]; then
+		echo
+		echo "ERROR: $OPENSSL_INCLUDES/openssl does not exist!"
+		echo
+		exit
+	fi
+
+	if [ "$OPENSSL_API" = "1.0.2" ]; then
+		copy_ec_header $OPENSSL_SOURCE/crypto/ec/ec_lcl.h $OPENSSL_INCLUDES/openssl/ec_lcl.h
+		copy_ec_header $OPENSSL_SOURCE/crypto/ec/ec_lcl.h $OPENSSL_SOURCE/include/openssl/ec_lcl.h
+		copy_ec_header $OPENSSL_SOURCE/crypto/ecdsa/ecs_locl.h $OPENSSL_INCLUDES/openssl/ecs_locl.h
+		copy_ec_header $OPENSSL_SOURCE/crypto/ecdsa/ecs_locl.h $OPENSSL_SOURCE/include/openssl/ecs_locl.h
+	fi
+
+	echo "Successfully installed OpenSSL ec and ecdsa header files."
+}
+
+##########################################
+#Checks to see if EC headers are installed
+##########################################
+check_ec_headers()
+{
+	headers_exist=0
+	if [ "$OPENSSL_API" = "1.0.2" ]; then
+		if [ -f $OPENSSL_INCLUDES/openssl/ec_lcl.h ]; then
+			if [ -f $OPENSSL_INCLUDES/openssl/ecs_locl.h ]; then
+				headers_exist=1
+			fi
+		fi
+	else
+		headers_exist=1
+	fi
+
+	if [ "$headers_exist" = "0" ]; then
+		echo
+		echo "ERROR:"
+		echo "The OpenSSL installation did not contain necessary header files to compile."
+		echo "$OPENSSL_INCLUDES/openssl/ec_lcl.h and $OPENSSL_INCLUDES/openssl/ecs_locl.h should exist."
+		echo
+		echo "Run ./gembuild openssl-ec-headers first to copy headers from the OpenSSL source directory."
+		echo
+		exit 1
+	fi
+
+}
+
+###################################################
+#Performs a build of the gem dynamic OpenSSL engine
+###################################################
+gem_build()
+{
+	echo "Building gem dynamic engine."
+
+	check_ec_headers
+
+	cd engine
+	OPENSSL_INCLUDES=$OPENSSL_INCLUDES OPENSSL_LIBS=$OPENSSL_LIBS LUNA_CONFIG_BITS=$LUNA_CONFIG_BITS  sh ./configure
+	make -f makefile clean
+	make -f makefile
+	cd $BASEDIR
+
+	so=engine/$ENGINE_SO
+
+	if [ ! -f "$so" ]; then
+		echo
+		echo "ERROR:  The build of the gem dynamic engine shared object did not succeed ($so was not generated.)"
+		echo
+		exit 1
+	else
+		echo
+		echo "$so created successfully!"
+		if [ -z "$OPENSSL_ENGINES" ]; then
+			echo
+			echo "Run \"./$SCRIPT_NAME locate-engines\" and copy it to that directory."
+			echo
+		else
+			echo
+			echo "Run \"./$SCRIPT_NAME engine-install\" to install it."
+			echo
+		fi
+	fi
+}
+
+########################
+#Installs the gem engine
+########################
+gem_install()
+{
+	echo "Installing gem dynamic engine to $OPENSSL_ENGINES."
+	if [ ! -f "engine/$ENGINE_SO" ]; then
+		echo
+		echo "ERROR: engine/$ENGINE_SO does not exist."
+		echo
+		echo "First run ./gembuild engine-build with successful completion."
+		echo
+		exit 1
+	fi
+
+	TMP_ENGINE_SO=gem.so
+	if [ "$OPENSSL_API" = "1.0.2" ]; then
+		TMP_ENGINE_SO=libgem.so
+	fi
+
+	cp engine/$ENGINE_SO $OPENSSL_ENGINES/$TMP_ENGINE_SO
+	if [ ! -f "$OPENSSL_ENGINES/$TMP_ENGINE_SO" ]; then
+		echo
+		echo "ERROR:  The engine shared object is not found in $OPENSSL_ENGINES"
+		echo
+		exit 1
+	fi
+	echo "The gem dynamic engine was successfully installed."
+}
+
+####################################
+# build the luna provider (openssl3)
+####################################
+provider_build()
+{
+   echo "Building luna provider ..."
+
+   cd lunaProvider
+   OPENSSL_INCLUDES=$OPENSSL_INCLUDES OPENSSL_LIBS=$OPENSSL_LIBS LUNA_CONFIG_BITS=$LUNA_CONFIG_BITS LIBOQS_PREFIX="$LIBOQS_PREFIX" OPENSSL_SOURCE="$OPENSSL_SOURCE"  sh ./configure
+   make -f makefile clean
+   if [ "$OPENSSL_API" = "3.2" ]; then
+     make -f makefile LUNA_OQS=1
+   else
+     make -f makefile LUNA_OQS=0
+   fi
+
+   cd $BASEDIR
+   so=lunaProvider/$PROVIDER_SO
+   if [ ! -f "$so" ]; then
+      echo ; echo "ERROR: build-provider failed ($so was not generated.)" ; echo
+      exit 1
+   else
+      echo ; echo "$so created successfully!"
+      if [ -z "$OPENSSL_PROVIDERS" ]; then
+         echo ; echo "Run \"./$SCRIPT_NAME locate-providers\" and copy it to that directory." ; echo
+      else
+         echo ; echo "Run \"./$SCRIPT_NAME provider-install\" to install it." ; echo
+      fi
+   fi
+}
+
+######################################
+# install the luna provider (openssl3)
+######################################
+provider_install()
+{
+   echo "Installing luna provider to $OPENSSL_PROVIDERS/ ..."
+
+   if [ ! -f "lunaProvider/$PROVIDER_SO" ]; then
+      echo ; echo "ERROR: lunaProvider/$PROVIDER_SO does not exist." ; echo
+      echo "First run ./gembuild provider-build with successful completion." ; echo
+      exit 1
+   fi
+
+   cp "lunaProvider/$PROVIDER_SO" "$OPENSSL_PROVIDERS/$PROVIDER_SO"
+   if [ ! -f "$OPENSSL_PROVIDERS/$PROVIDER_SO" ]; then
+      echo ; echo "ERROR:  The luna provider was not found in $OPENSSL_PROVIDERS/" ; echo
+      exit 1
+   fi
+   echo "The luna provider was successfully installed."
+}
+
+###########################
+#Performs a build of sautil
+###########################
+sautil_build()
+{
+	echo "Building sautil."
+	cd gem-samples/sautil
+	make -f makefile clean 
+	make -f makefile OPENSSL_INCLUDES=$OPENSSL_INCLUDES OPENSSL_LIBS=$OPENSSL_LIBS
+	if [ ! -f sautil ]; then
+		echo
+		echo "ERROR:  sautil executable was not found"
+		echo
+		exit 1
+	fi
+	cd $BASEDIR
+}
+
+###############
+#Install sautil
+###############
+sautil_install()
+{
+	echo "Installing sautil to $SAUTIL_PREFIX."
+	echo "mkdir -p "$SAUTIL_PREFX""
+	mkdir -p "$SAUTIL_PREFIX"
+	echo "cp -f sautil $SAUTIL_PREFIX/sautil"
+	cp -f gem-samples/sautil/sautil $SAUTIL_PREFIX/sautil
+	if [ "$?" = "0" ]; then
+		echo "Success."
+	fi
+	cd $BASEDIR
+}
+
+###########################
+#Performs a build of apache
+################################################################
+#
+# NOTES FOR CONFIGURING APACHE:
+#
+#   Worker model:"--with-mpm=worker".
+#   Or, prefork model:"--with-mpm=prefork".
+#
+#   Apache 2.4:--with-included-apr
+#   Apache 2.4:--enable-mpms-shared="worker prefork"
+###########################
+apache_build()
+{
+################################################################
+
+	echo
+	if [ ! -d $SAVEPATH ]; then
+		mkdir -p $SAVEPATH
+	fi
+
+################################################################
+
+	if [ ! -d "$APACHE_SOURCE/srclib/apr" ]; then
+		cp -rf "$APR_SOURCE" $APACHE_SOURCE/srclib/apr
+	fi
+	if [ ! -d "$APACHE_SOURCE/srclib/apr-util" ]; then
+		cp -rf "$APR_UTIL_SOURCE" $APACHE_SOURCE/srclib/apr-util
+	fi
+	if [ ! -d "$APACHE_SOURCE/srclib/apr-iconv" ]; then
+		cp -rf "$APR_ICONV_SOURCE" $APACHE_SOURCE/srclib/apr-iconv
+	fi
+
+	cd $APACHE_SOURCE
+################################################################
+
+	LUNA_CFLAGS=""
+	LUNA_LDFLAGS=""
+	LUNA_CFG_OPTS="--with-included-apr --disable-nonportable-atomics --disable-cgid --enable-mpms-shared=all --with-mpm=worker "
+	LUNA_LDFLAGS="-ldl"
+	if [ "$LUNA_CONFIG_BITS" = "64" ]; then
+		if [ ! -f /lib64/libexpat.so ]; then
+			ln -s /lib64/libexpat.so.0 /lib64/libexpat.so
+		fi
+		#LUNA_CFLAGS="-m64"
+		#apache with lunaprov:
+        LUNA_CFLAGS="-m64 -DOPENSSL_LOAD_CONF"
+		LUNA_LDFLAGS="-L$OPENSSL_LIBS -L$PREFIX/ssl/lib -ldl"
+	fi
+	if [ "$LUNA_CONFIG_BITS" = "32" ]; then
+		#LUNA_CFLAGS="-m32"
+		#apache with lunaprov:
+        LUNA_CFLAGS="-m32 -DOPENSSL_LOAD_CONF"
+	fi
+
+	echo "CFLAGS=$LUNA_CFLAGS  LDFLAGS=$LUNA_LDFLAGS  ./configure  $LUNA_CFG_OPTS ... " ; sleep 2
+
+	CFLAGS=$LUNA_CFLAGS  LDFLAGS=$LUNA_LDFLAGS \
+	  ./configure \
+		  --enable-ssl=static \
+		  --prefix=$PREFIX"/apache2" \
+		  --with-ssl=$PREFIX"/ssl/" \
+		  $LUNA_CFG_OPTS \
+	  > Apache_build.log 2>&1
+	echo "Building Apache ..."
+	make clean >> Apache_build.log 2>&1
+	make >> Apache_build.log 2>&1
+
+################################################################
+	echo "Installing Apache ..."
+	if [ -d $PREFIX/apache2 ]; then
+		$PREFIX/apache2/bin/apachectl stop
+		mv -f $PREFIX/apache2 $PREFIX/apache2.date`date +%Y%m%d%H%M%S`
+	fi
+	UNIQUEPATH=date`date +%Y%m%d%H%M%S`
+
+	cp -fp $APACHE_SOURCE/docs/conf/httpd.conf  $APACHE_SOURCE/docs/conf/httpd.conf.$UNIQUEPATH
+	cp -fp $APACHE_SOURCE/docs/conf/extra/httpd-ssl.conf  $APACHE_SOURCE/docs/conf/extra/httpd-ssl.conf.$UNIQUEPATH
+	cp -fp $APACHE_SOURCE/docs/conf/extra/httpd-mpm.conf  $APACHE_SOURCE/docs/conf/extra/httpd-mpm.conf.$UNIQUEPATH
+	cp -fp $BASEDIR/apache/httpd-luna.conf $APACHE_SOURCE/docs/conf/httpd.conf
+	cp -fp $BASEDIR/apache/ssl-luna.conf  $APACHE_SOURCE/docs/conf/extra/httpd-ssl.conf
+	cp -fp $BASEDIR/apache/mpm-luna.conf  $APACHE_SOURCE/docs/conf/extra/httpd-mpm.conf
+
+	make install >> Apache_build.log 2>&1
+	if [ ! -f $PREFIX/apache2/bin/httpd ]; then
+		echo "ERROR: see  $APACHE_SOURCE/Apache_build.log  for details."
+	  echo Exiting $PRODUCT installation ...
+	  cd $BASEDIR
+	  exit 1
+	fi
+
+	echo "Apache installation successful"
+	echo
+	echo "For generating rsa keys execute ./gembuild apache-genrsa"
+	cd $BASEDIR
+}
+
+warn_key() {
+echo
+echo '================================================================'
+echo '*** WARNING - INSTALLATION IS NOT COMPLETE ***'
+echo ''
+echo 'A self-signed certificate was installed at location:'
+echo ''
+echo     $PREFIX/apache2/conf/ssl.crt/server.crt
+echo ''
+echo 'You may use it as a temporary certificate while awaiting '
+echo 'the real certificate from your Certificate Authority.'
+echo ''
+echo 'To complete the install:'
+echo ''
+echo '1. Submit the certificate request file server.req to '
+echo '   your Certificate Authority.'
+echo ''
+echo '2. Upon receiving the real certificate, overwrite the '
+echo '   temporary certificate file.'
+echo ''
+echo '3. To restart apache server, run command:'
+echo ''
+echo     $PREFIX/apache2/bin/apachectl -k stop
+echo     $PREFIX/apache2/bin/apachectl -k start
+echo ''
+echo '================================================================'
+}
+
+
+################################################################
+warn_nokey() {
+echo
+echo '================================================================'
+echo '*** WARNING - INSTALLATION IS NOT COMPLETE ***'
+echo ''
+echo 'Generation of server key/certificate failed.'
+echo ''
+echo 'To generate server key/certificate at a later time, re-run'
+echo 'this script with argument:'
+echo ''
+echo '  ./gembuild  apache-genrsa'
+echo ''
+echo '================================================================'
+}
+
+
+################################################################
+read_extfile() {
+cat > server-tmp.cnf << EOF
+extensions = x509v3
+[ x509v3 ]
+nsComment = "DUMMY Server Cert"
+nsCertType = server
+EOF
+}
+
+
+###############################
+#Generates RSA keys for Apache
+###############################
+apache_genrsa()
+{
+	if [ $PREFIX != "" ]; then
+		OPENSSLEXE=$PREFIX/ssl/bin/openssl
+	fi
+
+	if [ $SAUTIL_PREFIX != "" ]; then
+		SAUTILEXE=$SAUTIL_PREFIX/sautil
+	fi
+	if [ ! -x $SAUTILEXE ]; then
+		echo " File not found: $SAUTILEXE"
+		exit 1
+	fi
+
+	if [ ! -x $OPENSSLEXE ]; then
+		$OPENSSLEXE="openssl"
+	fi
+
+	DO_RESTORE=0
+
+	printf '%s' "Proceed with $PRODUCT key generation y/n [y]: "
+	read ANSWER
+	if [ "$ANSWER" != "y" ] && [ "$ANSWER" != "" ]; then
+		printf '%s' "Restore keyfile from token y/n [n]: "
+  		read ANSWER2
+		if [ "$ANSWER2" != "y" ]; then
+			stage13_warn_nokey
+			exit 0
+		else
+			DO_RESTORE=1
+		fi
+	fi
+
+	read_extfile
+	if [ "" = "" ]; then
+		echo
+		echo "Hardware keys ..."
+		if [ "$DO_RESTORE" = "1" ]; then
+			echo "Restoring/Importing Server Key ..."
+			rm -f server.key > /dev/null 2>&1
+			$SAUTILEXE  $SAUTILARG_PRE -f server.key -a 0 $SAUTILARG_POST
+			#$SAUTILEXE  $SAUTILARG_PRE -f server.key -a 0:DSA $SAUTILARG_POST
+		else
+			echo "Generating Server Key (RSA-$RSAKEYSIZE) ..."
+			rm -f server.key > /dev/null 2>&1
+			$SAUTILEXE  $SAUTILARG_PRE -f server.key -g $RSAKEYSIZE -x 01:00:01 $SAUTILARG_POST
+		fi
+		echo
+		echo "Generating certificate request ..."
+		$OPENSSLEXE  req -sha256 $ENGINE_OPTS -new -nodes -key server.key -out server.req -verify
+		echo
+		echo "Generating temporary self-signed certificate ..."
+		$OPENSSLEXE  x509 -sha256 $ENGINE_OPTS -req -days $APACHE_KEYS_VALIDITY -in server.req -signkey server.key -out server.crt -extfile server-tmp.cnf
+	else
+		echo
+		echo "Software keys (debug only) ..."
+		echo
+		echo "Generating Server Key (RSA-$RSAKEYSIZE) ..."
+		$OPENSSLEXE  genrsa -out server.key $RSAKEYSIZE
+		echo
+		echo "Generating certificate request ..."
+		$OPENSSLEXE  req -sha256 -new -nodes -key server.key -out server.req -verify
+		echo
+		echo "Generating temporary self-signed certificate ..."
+		$OPENSSLEXE  x509 -sha256 -req -days $APACHE_KEYS_VALIDITY -in server.req -signkey server.key -out server.crt -extfile server-tmp.cnf
+	fi
+	echo
+	sleep 2
+	DATEPATH=date`date +%Y%m%d%H%M%S`
+	echo "Saving files in $SAVEPATH/$DATEPATH ..."
+	if [ ! -d $SAVEPATH/$DATEPATH ]; then
+		mkdir -p $SAVEPATH/$DATEPATH
+	fi
+	mv -f server.key $SAVEPATH/$DATEPATH/server.key
+	mv -f server.req $SAVEPATH/$DATEPATH/server.req
+	mv -f server.crt $SAVEPATH/$DATEPATH/server.crt
+	echo
+	echo "Installing server key file $PREFIX/apache2/conf/ssl.key/server.key ..."
+	mkdir -p $PREFIX/apache2/conf/ssl.key/  > /dev/null 2>&1
+	cp -fp  $SAVEPATH/$DATEPATH/server.key  $PREFIX/apache2/conf/ssl.key/
+	echo
+	echo "Installing temporary self-signed certificate file $PREFIX/apache2/conf/ssl.crt/server.crt ..."
+	mkdir -p $PREFIX/apache2/conf/ssl.crt/  > /dev/null 2>&1
+	cp -fp  $SAVEPATH/$DATEPATH/server.crt  $PREFIX/apache2/conf/ssl.crt/
+	if [ ! -f $SAVEPATH/$DATEPATH/server.crt ]; then
+		warn_nokey
+	else
+		warn_key
+	fi
+
+	cd $BASEDIR
+}
+
+###############################
+#Cleans all for DNSSec
+###############################
+dnssec_cleanall()
+{
+	cd dnssec
+	make -f dbuild.makefile cleanall
+	cd $BASEDIR
+}
+
+###############################
+#Clean  for DNSSec
+###############################
+dnssec_clean()
+{
+	cd dnssec
+	make -f dbuild.makefile clean
+	cd $BASEDIR
+
+}
+
+###############################
+#Make all for DNSSec
+###############################
+dnssec_makeall()
+{
+	cd dnssec
+	make -f dbuild.makefile all
+	cd $BASEDIR
+}
+
+
+###############################
+#Make bind for DNSSec
+###############################
+dnssec_makebind()
+{
+	cd dnssec
+	make -f dbuild.makefile bind-only
+	cd $BASEDIR
+}
+###############################
+#Performs a build of engineperf
+###############################
+engineperf_build()
+{
+	echo "Building engineperf."
+	cd gem-samples/engineperf
+	make -f makefile clean
+	# FIXME: fips for engineperf?
+	# was: LD_LIBRARY_PATH=$OPENSSL_LIBS make -f makefile OPENSSL_INCLUDES=$OPENSSL_INCLUDES OPENSSL_LIBS=$OPENSSL_LIBS LUNA_CONFIG_FIPS=no FIPS_PREFIX=$OPENSSL_FIPS_PREFIX
+	make -f makefile OPENSSL_INCLUDES=$OPENSSL_INCLUDES OPENSSL_LIBS=$OPENSSL_LIBS LUNA_CONFIG_FIPS=no FIPS_PREFIX=$OPENSSL_FIPS_PREFIX
+	cd $BASEDIR
+}
+
+######################################################
+#Locates the engines directory for the openssl in PATH
+######################################################
+locate_engines()
+{
+
+	if [ "$OPENSSL_API" = "1.0.2" ]; then
+		OPENSSL_ENGINES=`openssl engine dummy -v 2>&1 | tr '()' '\n\n' | grep 'libdummy.so$' | sed -e 's/\/libdummy.so//g'`
+	else
+		OPENSSL_ENGINES=`openssl engine dummy -v 2>&1 | tr '()' '\n\n' | grep 'dummy.so$' | sed -e 's/\/dummy.so//g'`
+	fi
+
+	if [ -z "$OPENSSL_ENGINES" ]; then
+		echo
+		echo "ERROR: Unable to locate the OpenSSL engines directory.  Is openssl in PATH?"
+		echo
+		exit 1
+	fi
+	echo
+	echo "The OpenSSL engines directory is located at:"
+	echo
+	echo "$OPENSSL_ENGINES"
+	echo
+	if [ "$UPDATE_ENGINES" = "1" ]; then
+		write_config
+	else
+		echo "Run './gembuild locate-engines -c' to cache the directory for the --openssl-engines option."
+		echo
+	fi
+}
+
+########################################################
+#Locates the providers directory for the openssl in PATH
+########################################################
+locate_providers()
+{
+   OPENSSL_PROVIDERS=`openssl req -provider dummy -v 2>&1 | tr '()' '\n\n' | grep 'dummy.so$' | sed -e 's/\/dummy.so//g'`
+   if [ -z "$OPENSSL_PROVIDERS" ]; then
+      echo ; echo "ERROR: Unable to locate the OpenSSL providers directory.  Is openssl in PATH?" ; echo
+      exit 1
+   fi
+   echo ; echo "The OpenSSL providers directory is located at:" ;  echo
+   echo "$OPENSSL_PROVIDERS" ; echo
+   if [ "$UPDATE_PROVIDERS" = "1" ]; then
+      write_config
+   else
+      echo "Run './gembuild locate-providers -c' to cache the directory for the --openssl-providers option." ; echo
+   fi
+}
+
+########################################
+#Performs a build of liboqs from source
+########################################
+liboqs_build()
+{
+  LOG="$LOGS/liboqs-build.log"
+  if [ -f "$LOG" ]; then
+    rm "$LOG"
+  fi
+  echo "Output logged to: $LOG."
+
+  log_echo "Building liboqs from source: $LIBOQS_SOURCE."
+  cd $LIBOQS_SOURCE
+  if [ ! -d _build001 ]; then
+    mkdir _build001
+  fi
+
+  cd _build001
+  export OPENSSL_ROOT_DIR="$PREFIX/ssl"
+  if [ ! -f Makefile ]; then
+    log_echo "Configuring liboqs using cmake3."
+    MY_OPT_1="-DOQS_OPT_TARGET=x86-64 -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$LIBOQS_PREFIX/liboqs"
+    MY_OPT_2="-DOQS_ALGS_ENABLED=\"All\""
+    MY_OPT_3="-DOQS_BUILD_ONLY_LIB=ON"
+    MY_OPT_4="-DOQS_MINIMAL_BUILD=\"FOO_startoflist;KEM_kyber_512;KEM_kyber_768;KEM_kyber_1024;SIG_dilithium_2;SIG_dilithium_3;SIG_dilithium_5;SIG_falcon_512;SIG_falcon_padded_512;SIG_falcon_1024;SIG_falcon_padded_1024;KEM_ml_kem_512_ipd;KEM_ml_kem_512;KEM_ml_kem_768_ipd;KEM_ml_kem_768;KEM_ml_kem_1024_ipd;KEM_ml_kem_1024;SIG_ml_dsa_44_ipd;SIG_ml_dsa_44;SIG_ml_dsa_65_ipd;SIG_ml_dsa_65;SIG_ml_dsa_87_ipd;SIG_ml_dsa_87;SIG_sphincs_sha2_128f_simple;SIG_sphincs_sha2_128s_simple;SIG_sphincs_sha2_192f_simple;SIG_sphincs_sha2_192s_simple;SIG_sphincs_sha2_256f_simple;SIG_sphincs_sha2_256s_simple;SIG_sphincs_shake_128f_simple;SIG_sphincs_shake_128s_simple;SIG_sphincs_shake_192f_simple;SIG_sphincs_shake_192s_simple;SIG_sphincs_shake_256f_simple;SIG_sphincs_shake_256s_simple;\""
+    MY_OPT_5="-DOQS_DIST_BUILD=OFF"
+    MY_OPT_6="-DOQS_USE_OPENSSL=ON -DOQS_USE_AES_OPENSSL=ON -DOQS_USE_SHA2_OPENSSL=ON -DOQS_USE_SHA3_OPENSSL=ON"
+    MY_OPT_7="-DOPENSSL_ROOT_DIR=\"$PREFIX/ssl\""
+    log_run "cmake3 $MY_OPT_1 $MY_OPT_2 $MY_OPT_3 $MY_OPT_4 $MY_OPT_5 $MY_OPT_6 $MY_OPT_7 .."
+  fi
+
+  log_echo "Compiling liboqs from source."
+  make clean 1>> "$LOG" 2>&1
+  make 1>> "$LOG" 2>&1
+  if [ $? -ne 0 ]; then
+    log_echo "ERROR:  There was an issue compiling liboqs.  See $LOG for details."
+    log_echo "  HINT: fix the root cause then rename directory $LIBOQS_SOURCE/_build001/ ."
+    exit 1
+  fi
+
+  cd $BASEDIR
+  liboqs=$LIBOQS_SOURCE/_build001/lib/liboqs.a
+  if [ ! -f "$liboqs" ]; then
+    log_echo "ERROR: liboqs library was not found at $liboqs.  The compilation was not successful.  See $LOG for details."
+    exit 1
+  fi
+
+  log_echo "Successfully completed compiling liboqs."
+}
+
+#################
+#Installs liboqs
+#################
+liboqs_install()
+{
+  LOG="$LOGS/liboqs-install.log"
+  if [ -f "$LOG" ]; then
+    rm "$LOG"
+  fi
+  echo "Output logged to: $LOG."
+
+  log_echo "Installing liboqs from $LIBOQS_SOURCE to $LIBOQS_PREFIX/liboqs ."
+  if [ -d "$LIBOQS_PREFIX/liboqs" ]; then
+    DATEPATH=`date +%Y%m%d%H%M%S`
+    mv "$LIBOQS_PREFIX/liboqs" "$LIBOQS_PREFIX/liboqs-$DATEPATH"
+  fi
+
+  cd "$LIBOQS_SOURCE/_build001"
+  make install 1>> "$LOG" 2>&1
+  if [ $? -ne 0 ]; then
+    log_echo "ERROR:  There was an issue installing liboqs.  See $LOG for details."
+    exit 1
+  fi
+
+  cd $BASEDIR
+  liboqs="$LIBOQS_PREFIX/liboqs/lib64/liboqs.a"
+  if [ ! -f "$liboqs" ]; then
+    log_echo "ERROR: liboqs library was not found at $liboqs.  There was an issue installing it.  See $LOG for details."
+    exit 1
+  fi
+
+  log_echo "Successfully completed installing liboqs."
+}
+
+#Parse the command
+
+if [ $# -eq 0 ]; then
+	usage
+	echo
+	echo "ERROR: You must specify a command."
+	echo
+	exit 1
+fi
+
+
+COMMAND=$1
+shift
+
+case $COMMAND in
+	help | --help)
+		usage
+		exit 1
+		;;
+	config)
+		WRITE_CONFIG=1
+		clear_config
+		;;
+	openssl-fips-build)
+		OPENSSL_FIPS_BUILD=1
+		;;
+	openssl-fips-install)
+		OPENSSL_FIPS_INSTALL=1
+		;;
+	openssl-build)
+		OPENSSL_BUILD=1
+		;;
+	openssl-install)
+		OPENSSL_INSTALL=1
+		OPENSSL_EC_HEADERS=1
+		;;
+	openssl-ec-headers)
+		OPENSSL_EC_HEADERS=1
+		;;
+	locate-engines)
+		LOCATE_ENGINES=1
+		;;
+   locate-providers)
+      LOCATE_PROVIDERS=1
+      ;;
+	engine-build)
+		ENGINE_BUILD=1
+		;;
+	engine-install)
+		ENGINE_INSTALL=1
+		;;
+   provider-build)
+      PROVIDER_BUILD=1
+      ;;
+   provider-install)
+      PROVIDER_INSTALL=1
+      ;;
+   liboqs-build)
+      LIBOQS_BUILD=1
+      ;;
+   liboqs-install)
+      LIBOQS_INSTALL=1
+      ;;
+	sautil-build)
+		SAUTIL_BUILD=1
+		;;
+	sautil-install)
+		SAUTIL_INSTALL=1
+		;;
+	engineperf-build)
+		ENGINEPERF_BUILD=1
+		;;
+	apache-build)
+		APACHE_BUILD=1
+		;;
+	apache-genrsa)
+		APACHE_GENRSA=1
+		;;
+	dnssec-cleanall)
+		DNSSEC_CLEANALL=1
+		;;
+	dnssec-clean)
+		DNSSEC_CLEAN=1
+		;;
+	dnssec-makeall)
+		DNSSEC_MAKEALL=1
+		;;
+	dnssec-makebind)
+		DNSSEC_MAKEBIND=1
+		;;
+	*)
+		usage
+		echo
+		echo "ERROR:  \"$COMMAND\" is not a valid command."
+		echo
+		exit 1
+		;;
+esac
+
+
+#Parse the options
+
+while [ -n 	"$1" ]; do
+	PARAM=`echo $1 | awk -F= '{print $1}'`
+	VALUE=`echo $1 | awk -F= '{print $2}'`
+	case $PARAM in
+		-h | --help)
+			usage
+			exit 1
+			;;
+		-s | --openssl-source)
+			OPENSSL_SOURCE=$VALUE
+			;;
+		-q | --liboqs-source)
+			LIBOQS_SOURCE=$VALUE
+			;;
+		-p | --prefix)
+			PREFIX=$VALUE
+			;;
+		-e | --openssl-engines)
+			OPENSSL_ENGINES=$VALUE
+			;;
+      --openssl-providers)
+         OPENSSL_PROVIDERS=$VALUE
+         ;;
+		-i | --openssl-includes)
+			OPENSSL_INCLUDES=$VALUE
+			;;
+		-l | --openssl-libs)
+			OPENSSL_LIBS=$VALUE
+			;;
+		-t | --openssl-target)
+			OPENSSL_TARGET=$VALUE
+			;;
+		-b | --config-bits)
+			LUNA_CONFIG_BITS=$VALUE
+			;;
+      --openssl-api)
+         OPENSSL_API=$VALUE
+         ;;
+		-f | --openssl-fips-source)
+			OPENSSL_FIPS_SOURCE=$VALUE
+			FIPS_MODULE=yes
+			;;
+      --fips-module)
+         FIPS_MODULE=$VALUE
+         ;;
+		-fp | --openssl-fips-prefix)
+			OPENSSL_FIPS_PREFIX=$VALUE
+			;;
+		-u | --sautil-prefix)
+			SAUTIL_PREFIX=$VALUE
+			;;
+		--liboqs-prefix)
+			LIBOQS_PREFIX=$VALUE
+			;;
+		-c | --cache)
+         UPDATE_ENGINES=1
+         UPDATE_PROVIDERS=1
+			;;
+		-n | --apache-keys-validity)
+			APACHE_KEYS_VALIDITY=$VALUE
+			;;
+		--apache-source)
+			APACHE_SOURCE=$VALUE
+			;;
+		--apr-source)
+			APR_SOURCE=$VALUE
+			;;
+		--apr-util-source)
+			APR_UTIL_SOURCE=$VALUE
+			;;
+		--apr-iconv-source)
+			APR_ICONV_SOURCE=$VALUE
+			;;
+		--so-version)
+			SO_VERSION=$VALUE
+			;;
+		--use-source-headers)
+			USE_SOURCE_HEADERS=1
+			;;
+		--config-only)
+			CONFIG_ONLY=1
+			;;
+		*)
+			usage
+			echo "ERROR:  Unrecognized option: $PARAM"
+			exit 1
+			;;
+	esac
+	shift
+done
+
+if [ -z "$LUNA_CONFIG_BITS" ]; then
+	guess_config_bits
+fi
+
+
+set_openssl_target
+if [ -z "$OPENSSL_TARGET" ]; then
+	OPENSSL_TARGET=$LUNA_CFG_TGT
+fi
+
+if [ "$LOCATE_ENGINES" = "1" ]; then
+	locate_engines
+	exit
+fi
+
+if [ "$LOCATE_PROVIDERS" = "1" ]; then
+   locate_providers
+   exit
+fi
+
+echo "OPENSSL_SOURCE=$OPENSSL_SOURCE"
+echo "LIBOQS_SOURCE=$LIBOQS_SOURCE"
+echo "OPENSSL_INCLUDES=$OPENSSL_INCLUDES"
+echo "OPENSSL_LIBS=$OPENSSL_LIBS"
+echo "OPENSSL_ENGINES=$OPENSSL_ENGINES"
+echo "OPENSSL_PROVIDERS=$OPENSSL_PROVIDERS"
+echo "OPENSSL_TARGET=$OPENSSL_TARGET"
+echo "OPENSSL_FIPS_SOURCE=$OPENSSL_FIPS_SOURCE"
+echo "OPENSSL_API=$OPENSSL_API"
+echo "FIPS_MODULE=$FIPS_MODULE"
+echo "PREFIX=$PREFIX"
+echo "LUNA_CONFIG_BITS=$LUNA_CONFIG_BITS"
+echo "SAUTIL_PREFIX=$SAUTIL_PREFIX"
+echo "LIBOQS_PREFIX=$LIBOQS_PREFIX"
+echo "APACHE_KEYS_VALIDITY=$APACHE_KEYS_VALIDITY"
+echo "APACHE_SOURCE=$APACHE_SOURCE"
+echo "APR_SOURCE=$APR_SOURCE"
+echo "APR_UTIL_SOURCE=$APR_UTIL_SOURCE"
+echo "APR_ICONV_SOURCE=$APR_ICONV_SOURCE"
+
+if [ ! "$LUNA_CONFIG_BITS" = "32" ]; then
+	if [ ! "$LUNA_CONFIG_BITS" = "64" ]; then
+		if [ ! "$LUNA_CONFIG_BITS" = "LEGACY" ]; then
+			usage
+			echo
+			echo "ERROR: Options --config-bits is not specified."
+			exit 1
+		fi
+	fi
+fi
+
+if [ "$APACHE_BUILD" != "1" ]; then
+	if [ "$APACHE_GENRSA" != "1" ]; then
+		if [ -z "$OPENSSL_SOURCE" ]; then
+			usage
+			echo
+			echo "ERROR: --openssl-source must be set.  It is recommended to first run ./$SCRIPT_NAME config"
+			echo
+			exit 1
+		fi
+	fi
+fi
+
+if [ "$LIBOQS_BUILD" = "1" ]; then
+  if [ -z "$LIBOQS_SOURCE" ]; then
+    usage
+    echo "ERROR: --liboqs-source must be set.  It is recommended to first run ./$SCRIPT_NAME config"
+    exit 1
+  fi
+fi
+
+if [ "$PROVIDER_BUILD" = "1" ]; then
+  if [ -z "$OPENSSL_SOURCE" ]; then
+    usage
+    echo "ERROR: --openssl-source must be set.  It is recommended to first run ./$SCRIPT_NAME config"
+    exit 1
+  fi
+fi
+
+if [ -z "$SAUTIL_PREFIX" ]; then
+	if [ ! $PREFIX = "" ]; then
+		SAUTIL_PREFIX=$PREFIX/sautil/bin
+	else
+		SAUTIL_PREFIX=/usr/local/bin
+	fi
+fi
+
+if [ -z "$LIBOQS_PREFIX" ]; then
+	if [ ! "$PREFIX" = "" ]; then
+		LIBOQS_PREFIX=$PREFIX/liboqs
+	else
+		LIBOQS_PREFIX=/usr/local
+	fi
+fi
+
+if [ "$FIPS_MODULE" = "yes" ]; then
+	if [ -z "$OPENSSL_FIPS_PREFIX" ]; then
+		if [ "$PREFIX" = "" ]; then
+			OPENSSL_FIPS_PREFIX=/usr/local
+		else
+			OPENSSL_FIPS_PREFIX=$PREFIX
+		fi
+	fi
+fi
+
+if [ -z "$OPENSSL_INCLUDES" ]; then
+	if [ "$USE_SOURCE_HEADERS" = "1" ]; then
+		OPENSSL_INCLUDES=$OPENSSL_SOURCE/include
+	else
+		if [ ! $PREFIX = "" ]; then
+			OPENSSL_INCLUDES=$PREFIX/ssl/include
+		else
+			OPENSSL_INCLUDES=/usr/include
+		fi
+	fi
+fi
+if [ -z "$OPENSSL_LIBS" ]; then
+	if [ ! $PREFIX = "" ]; then
+		OPENSSL_LIBS=$PREFIX/ssl/lib
+	fi
+fi
+if [ -z "$OPENSSL_ENGINES" ]; then
+	if [ ! $PREFIX = "" ]; then
+      OPENSSL_ENGINES=$PREFIX/ssl/lib/engines-3
+      if [ "$OPENSSL_API" = "1.1.1" ]; then
+         OPENSSL_ENGINES=$PREFIX/ssl/lib/engines-1.1
+      fi
+		if [ "$OPENSSL_API" = "1.0.2" ]; then
+			OPENSSL_ENGINES=$PREFIX/ssl/lib/engines
+		fi
+	fi
+fi
+
+if [ -z "$OPENSSL_PROVIDERS" ]; then
+   if [ ! $PREFIX = "" ]; then
+      OPENSSL_PROVIDERS=$PREFIX/ssl/lib/ossl-modules
+   fi
+fi
+
+if [ "$WRITE_CONFIG" = "1" ]; then
+	write_config
+fi
+
+if [ "$OPENSSL_FIPS_BUILD" = "1" ]; then
+	openssl_fips_build
+fi
+
+if [ "$OPENSSL_FIPS_INSTALL" = "1" ]; then
+	openssl_fips_install
+fi
+
+
+if [ "$OPENSSL_BUILD" = "1" ]; then
+	openssl_build
+fi
+
+if [ "$OPENSSL_INSTALL" = "1" ]; then
+	openssl_install
+fi
+
+if [ "$OPENSSL_EC_HEADERS" = "1" ]; then
+	openssl_ec_headers
+fi
+
+if [ "$ENGINE_BUILD" = "1" ]; then
+	gem_build
+fi
+
+if [ "$ENGINE_INSTALL" = "1" ]; then
+	gem_install
+fi
+
+if [ "$PROVIDER_BUILD" = "1" ]; then
+   provider_build
+fi
+
+if [ "$PROVIDER_INSTALL" = "1" ]; then
+   provider_install
+fi
+
+if [ "$LIBOQS_BUILD" = "1" ]; then
+   liboqs_build
+fi
+
+if [ "$LIBOQS_INSTALL" = "1" ]; then
+   liboqs_install
+fi
+
+if [ "$SAUTIL_BUILD" = "1" ]; then
+	sautil_build
+fi
+
+if [ "$SAUTIL_INSTALL" = "1" ]; then
+	sautil_install
+fi
+
+if [ "$ENGINEPERF_BUILD" = "1" ]; then
+	engineperf_build
+fi
+
+if [ "$APACHE_BUILD" = "1" ]; then
+	apache_build
+fi
+
+if [ "$APACHE_GENRSA" = "1" ]; then
+	apache_genrsa
+fi
+if [ "$DNSSEC_CLEANALL" = "1" ]; then
+	dnssec_cleanall
+fi
+if [ "$DNSSEC_CLEAN" = "1" ]; then
+	dnssec_clean
+fi
+if [ "$DNSSEC_MAKEALL" = "1" ]; then
+	dnssec_makeall
+fi
+if [ "$DNSSEC_MAKEBIND" = "1" ]; then
+	dnssec_makebind
+fi
+
+#eof
+

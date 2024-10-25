@@ -1,44 +1,62 @@
-# Thales Open Source Template Project
 
-Template for creating a new project in the [Thales GitHub organization](https://github.com/ThalesGroup).
+# Luna Crypto Provider (lunaprov)
 
-Each Thales OSS project repository **MUST** contain the following files at the root:
+This project offers a plugin to Open SSL (3.2) for the purpose of generating and using cryptographic keys on a [Luna General Purpose HSMs](https://cpl.thalesgroup.com/encryption/hardware-security-modules/general-purpose-hsms), and more specifically [Luna Network HSMs](https://cpl.thalesgroup.com/encryption/hardware-security-modules/network-hsms). 
 
-- a `LICENSE` which has been chosen in accordance with legal department depending on your needs
+## Introduction
 
-- a `README.md` outlining the project goals, sponsoring sig, and community contact information, [GitHub tips about README.md](https://docs.github.com/en/github/creating-cloning-and-archiving-repositories/about-readmes)
+lunaprov is based on the [PKCS#11 specification](https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/os/pkcs11-base-v2.40-os.html), with some [Luna specific extensions](https://thalesdocs.com/gphsm/luna/7/docs/network/Content/sdk/pkcs11/pkcs11_standard.htm).
 
-- a `CONTRIBUTING.md` outlining how to contribute to the project, how to submit a pull request and an issue
+It has been tested with the Luna Network HSM.
 
-- a `SECURITY.md` outlining how the security concerns are handled, [GitHub tips about SECURITY.md](https://docs.github.com/en/github/managing-security-vulnerabilities/adding-a-security-policy-to-your-repository)
+lunaprov allows to:
+-	Create keypair (RSA, DSA, EC, PQC, ED25519/448, X25519/448).
+-	Sign certificate or other data.
+-   Establish TLS connection (KEM and certificate authentication).
 
-Below is an example of the common structure and information expected in a README.
+These operations require to create partitions, register clients, initialize user roles, etc. These tasks can be performed using:
+- The [Luna Universal Client](https://thalesdocs.com/gphsm/luna/7/docs/network/Content/Utilities/Preface.htm)
+  - The [Luna Shell (Lush)](https://thalesdocs.com/gphsm/luna/7/docs/network/Content/lunash/Preface.htm)
+  - The [Luna client management tool (LunaCM)](https://thalesdocs.com/gphsm/luna/7/docs/network/Content/lunacm/Preface.htm).
 
-**Please keep this structure as is and only fill the content for each section according to your project.**
+## Minimum System Requirements
 
-If you need assistance or have question, please contact oss@thalesgroup.com
+- Operating System:
+  - Linux RHEL 8.
+  - Linux Ubuntu 20.
+  - Windows Server 2016-2022.
+- Thales software:
+  - Client 10.7.1.
+  - Appliance 7.7.1.
+  - Firmware 7.7.1.
+  - NOTE: if using Functional Modules then PQC FM 3.1.
+  
+## Minimum Build Requirements
 
-## Get started
+- Development tools:
+  - Linux:
+    - gcc 8.3.1.
+    - perl 5.16.3.
+    - cmake3 3.17.5.
+    - common UNIX commands.
+  - Windows:
+    - cl 19.00.24215.1 (Visual Studio 2015-2019).
+    - perl 5.32.1 (ActiveState or Strawberry).
+    - cmake 3.27.9 (Kitware).
+    - common UNIX commands (MinGW or Cygwin).
 
-XXX project purpose it to ...
+## Run
 
-**Please also add the description into the About section (Description field)**
+For more details see the folder 'docs'.
 
-## Documentation
+## Test
 
-Documentation is available at [xxx/docs](https://xxx/docs/).
-
-You can use [GitHub pages](https://guides.github.com/features/pages/) to create your documentation.
-
-See an example here : https://github.com/ThalesGroup/ThalesGroup.github.io
-
-**Please also add the documentation URL into the About section (Website field)**
+The folder 'tests' contains scripts that exercise the HSM via openssl command line utility.
 
 ## Contributing
 
-If you are interested in contributing to the XXX project, start by reading the [Contributing guide](/CONTRIBUTING.md).
+If you are interested in contributing to this project, please read the [Contributing guide](CONTRIBUTING.md).
 
 ## License
 
-The chosen license in accordance with legal department must be defined into an explicit [LICENSE](https://github.com/ThalesGroup/template-project/blob/master/LICENSE) file at the root of the repository
-You can also link this file in this README section.
+This software is provided under a [permissive license](LICENSE).

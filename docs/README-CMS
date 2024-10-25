@@ -1,0 +1,77 @@
+Copyright (c) 2015 SafetNet, Inc. All rights reserved.
+
+
+
+README-CMS
+
+
+  The following steps demonstrate how to manipulate CMS messages
+  using utilities 'sautil' and 'openssl cms'.
+
+  sautil and openssl have locations that depend on steps followed in "README-GEMBUILD".
+
+  The Gem HSM middleware is configured according to file "README-GEM-CONFIG".
+
+
+
+INSTRUCTIONS
+
+
+  STEP 1. Open connection to HSM (and login).
+
+    # sautil -v -s 1 -i 10:11 -o -q
+
+    NOTE: you should select a different value than "10:11"
+      to customize your application environment.
+      And you may select a different slot number than "1".
+
+
+  STEP 2a. Generate RSA keypair and related keyfile (for use with OpenSSL).
+
+    # sautil -v -s 1 -i 10:11 -g 1024 -f server.key
+
+
+or, STEP 2b. Generate keyfile (from existing RSA keypair).
+
+    # sautil -v -s 1 -i 10:11 -a 0:RSA -f server.key
+
+
+  STEP 3. Generate certificate request (to be signed by a certificate authority).
+
+    # openssl req -engine gem -new -nodes -key server.key -out server.req -verify
+
+    NOTE: this simplified example will self-sign the certificate as follows.
+
+    # openssl x509 -engine gem -req -in server.req -signkey server.key -out server.crt
+
+
+  STEP 4. cms sign.
+
+    # openssl cms -sign \
+      -binary -nodetach -nosmimecap -noverify -noattr -md sha256 \
+      -in plain.txt -out plain.msg -outform der \
+      -signer server.crt \
+      -engine gem -inkey server.key
+
+    # openssl cms -cmsout -print -noout -binary -inform DER -in plain.msg
+
+
+  STEP 5. cms verify.
+
+    # openssl cms -verify \
+      -binary -nodetach -nosmimecap -noverify -noattr -md sha256 \
+      -in plain.msg -inform der -out foo.txt \
+      -signer server.crt -noverify 
+
+
+  STEP 6. Close connection to HSM (and logout).
+
+    # sautil -v -s 1 -i 10:11 -c
+
+
+
+For more examples of cms, see the man pages; i.e., command "man  -M /usr/local/ssl/man  cms".
+
+
+
+Copyright (c) 2015 SafetNet, Inc. All rights reserved.

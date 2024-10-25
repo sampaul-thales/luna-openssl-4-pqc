@@ -1,0 +1,214 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+PURPOSE
+
+
+  The gembuild script is centered around generating/integrating SafeNet's OpenSSL dynamic engine with a working installation of OpenSSL.
+
+  There are various scenarios for using gembuild depending on exactly what you are trying to accomplish.
+
+  The gembuild script has a set of commands that it accepts as well as various options.  Run "./gembuild --help" for usage.
+
+  NOTE:  The supported OpenSSL versions are 1.0.0x, 1.0.1x and 1.0.2x (x means any of the lettered versions).
+
+
+
+SCENARIOS:
+
+
+
+SCENARIO A - Integration of a pre-built dynamic engine with OpenSSL on Linux.
+
+
+  STEP 1. Locate the libgem.so and sautil files inside of builds/linux/<flavour>/<bits>/<stream> where selecting the flavour of linux, how many bits the architecture is and the OpenSSL stream.
+           
+    For a Debian based Linux (Debian, Ubunutu, etc.) choose debian, and for a RHEL based Linux (RHEL, CentOS, Fedora) select rhel.
+
+    If you run "openssl version" this will tell you what OpenSSL stream to select.
+
+    An example would be builds/linux/rhel/64/1.0.1 for CentOS 64bit where the OpenSSL version is a variant of 1.0.1.
+
+
+  STEP 2. Locate the location of the OpenSSL engines directory using gembuild.
+  
+    # ./gembuild locate-engines
+
+      The openssl engines directory is located at:
+
+      /usr/lib64/openssl/engines
+
+    This will display the engines directory for the openssl that is in PATH.
+
+
+  STEP 3. Copy the libgem.so to the engines directory and test engine.
+
+    Example:
+
+    # cp builds/linux/rhel/64/1.0.1/libgem.so /usr/lib64/openssl/engines
+
+    # openssl engine gem -v
+      (gem) Gem engine support
+           enginearg, openSession, closeSession, login, logout, engineinit,
+           CONF_PATH, ENGINE_INIT, ENGINE2_INIT, engine2init, DisableCheckFinalize,
+           SO_PATH, GET_HA_STATE, SET_FINALIZE_PENDING, SKIP_C_INITIALIZE
+
+    If the output looks as above them the gem engine is successfully installed.
+
+
+  STEP 4. Copy the sautil command to /usr/local/bin
+
+    Example:
+
+    # cp builds/linux/rhel/64/1.0.1/sautil /usr/local/bin
+
+    # sautil
+
+    The usage of sautil should be displayed.
+
+
+
+SCENARIO B - Compiling of the dynamic engine to be installed with an existing installation of OpenSSL.
+
+
+  PREREQUISITE:  Ensure that your system has an appropriate C compiler installed such as gcc and the make utility.
+
+
+  STEP 1. Download and extract OpenSSL source tarball.  Get the version that is close to your existing OpenSSL instalation (run "openssl version").
+
+    Example:
+
+    Download openssl-1.0.1o.tar.gz from https://www.openssl.org/source/
+
+    # tar xvfz openssl-1.0.1o.tar.gz
+
+
+  STEP 2. Locate the OpenSSL engines directory.
+
+    # ./gembuild locate-engines
+
+
+  STEP 3. Run gembuild config
+
+    Example:
+    # ./gembuild config --openssl-source=/home/username/openssl-1.0.1o --openssl-engines=/usr/lib64/openssl/engines --config-bits=64
+
+    NOTE: This assumes that the openssl headers directory is located in /usr/include.  It may be necessary to install the openssl development package.
+          If the header files are located in a different location, the --openssl-includes option can be used.  As well, the --openssl-libs options can
+          be used to specify the location of the lib directory with libcrypto.so.  All paths need to be absolute.
+
+    NOTE: It is possible to use the header files from the downloaded source.  In order to do so, pass the --use-source-headers option
+          to the "./gembuild config" command.
+
+
+  STEP 4. Install some needed EC header files.
+
+    # ./gembuild openssl-ec-headers
+
+
+  STEP 5. Compile the engine.
+
+    # ./gembuild engine-build
+
+
+  STEP 6. Install and test the engine.
+
+    # ./gembuild engine-install
+
+    # openssl engine gem -v
+      (gem) Gem engine support
+           enginearg, openSession, closeSession, login, logout, engineinit,
+           CONF_PATH, ENGINE_INIT, ENGINE2_INIT, engine2init, DisableCheckFinalize,
+           SO_PATH, GET_HA_STATE, SET_FINALIZE_PENDING, SKIP_C_INITIALIZE
+
+
+  STEP 7. Compile and install sautil.
+
+    # ./gembuild sautil-build
+
+    # ./gembuild sautil-install
+
+    By default this will install the sautil command to /usr/local/bin/sautil.
+
+    If a different location is desired, use the --sautil-prefix option to specify the desired directory either by redoing STEP 3 with the option
+    or by specifying the option as part of the "./gembuild sautil-install" command.
+
+
+
+SCENARIO C - Compiling and installing OpenSSL from source and compiling and installing gem engine.
+
+
+  STEP 1a. Download and extract OpenSSL source tarball.
+
+    Example:
+
+    Download openssl-1.0.2s.tar.gz from https://www.openssl.org/source/
+
+    # tar xvfz openssl-1.0.2s.tar.gz
+
+
+  STEP 1b. Download and extract OpenSSL FIPS module.  Ignore this step if FIPS module is not required.
+
+    Example:
+
+    Download openssl-fips-2.0.9.tar.gz from https://www.openssl.org/source/
+
+    # tar xvfz openssl-fips-2.0.9.tar.gz
+
+
+  STEP 2. Run gembuild config using the --prefix option.
+
+    Example:
+    # ./gembuild config --openssl-source=/home/username/openssl-1.0.2s --prefix=/usr/local --config-bits=64
+    
+    If FIPS module is required, add --openssl-fips-source=/home/username/openssl-fips-2.0.9 to the ./gembuild config command. 
+
+
+  STEP 3a. Compile and install FIPS module.  Proceed to STEP 3b if FIPS module is not required.
+
+    # ./gembuild openssl-fips-build
+
+    # ./gembuild openssl-fips-install
+
+
+  STEP 3b. Compile and install OpenSSL.
+
+    # ./gembuild openssl-build
+
+    # ./gembuild openssl-install
+
+
+  STEP 4. Compile and install gem dynamic engine and verify engine.
+
+    # ./gembuild engine-build
+
+    # ./gembuild engine-install
+
+    # openssl engine gem -v
+      (gem) Gem engine support
+           enginearg, openSession, closeSession, login, logout, engineinit,
+           CONF_PATH, ENGINE_INIT, ENGINE2_INIT, engine2init, DisableCheckFinalize,
+           SO_PATH, GET_HA_STATE, SET_FINALIZE_PENDING, SKIP_C_INITIALIZE
+
+
+  STEP 5. Compile and install sautil command.
+
+    # ./gembuild sautil-build
+
+    # ./gembuild sautil-install
+
+    By default this will install the sautil command to <prefix>/sautil/bin/sautil where <prefix> is the directory specified with --prefix option in STEP 2.
+
+    If a different location is desired, use the --sautil-prefix option to specify the desired directory either by redoing STEP 2 with the option
+    or by specifying the option as part of the "./gembuild sautil-install" command.
+
+
+   STEP 6.  Add openssl and sautil to PATH
+
+     Example:
+     # export PATH=/usr/local/ssl/bin:/usr/local/sautil/bin:$PATH
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

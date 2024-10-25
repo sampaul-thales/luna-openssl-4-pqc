@@ -1,0 +1,156 @@
+#!/bin/sh
+##############################################################################
+#
+# This file is part of the "Luna OpenSSL for PQC" project.
+#
+# The " Luna OpenSSL for PQC " project is provided under the MIT license (see the
+# following Web site for further details: https://mit-license.org/ ).
+#
+# Copyright © 2024 Thales Group
+#
+##############################################################################
+
+# Operating system:
+UNAMES=`uname -s`
+UNAMEM=`uname -m`
+UNAMEP=`uname -p`
+UNAMEO=`uname -o 2> /dev/null`
+echo "System... $UNAMES"
+
+if [ -z "$INCLUDES" ]; then
+	if [ ! "$OPENSSL_INCLUDES" = "" ]; then
+		INCLUDES="-I$OPENSSL_INCLUDES"
+	fi
+fi
+
+echo "Includes... $INCLUDES"
+
+if [ -z "$LUNA_CONFIG_BITS" ]; then
+	LUNA_CONFIG_BITS=64
+fi
+
+if [ -z "$LIBS" ]; then
+	if [ ! "$OPENSSL_LIBS" = "" ]; then
+		LIBS="-L$OPENSSL_LIBS"
+	fi
+fi
+
+if [ -z "$LDSO" ]; then
+	LDSO="libgem.so"
+fi 
+
+echo "Libs... $LIBS"
+
+if [ "$UNAMES" = "SunOS" ]; then
+	`which cc 1> /dev/null 2>&1`
+	if [ "$?" -eq "0" ]; then
+		CC1=cc
+		if [ "$UNAMEP" = "sparc" ]; then
+			CFLAGS1="-xarch=v9 -Kpic"
+			LDFLAGS1="-xarch=v9 -G -h $LDSO -Kpic"
+		else
+			CFLAGS1="-xarch=amd64 -Kpic"
+			LDFLAGS1="-xarch=amd64 -G -h $LDSO -Kpic"
+		fi
+		LD1=cc
+		# NOTE: LDEXTRA shall not mention -lcrypto; the makefile will decide howto link libcrypto!
+		LDEXTRA1="-lpthread -lrt -lsocket -ldl"
+	fi
+fi
+
+if [ "$UNAMES" = "AIX" ]; then
+	`which cc_r 1> /dev/null 2>&1`
+	if [ "$?" -eq "0" ]; then
+		CC1="cc_r"  		
+  		CFLAGS1="-qcpluscmt -O2 -qstrict -qmaxmem=16384 -qtbtable=none -q64" 		
+  		LD1="cc_r"
+  		LDFLAGS1="-q64 -G"
+  		LDEXTRA1="-lpthread"
+  	fi
+fi
+
+if [ "$UNAMES" = "HP-UX" ]; then
+  	`which cc_r 1> /dev/null 2>&1`
+	if [ "$?" -eq "0" ]; then
+		if [ "$UNAMEM" = "ia64" ]; then
+			CC1="cc -D__NO_PA_HDRS"
+			CFLAGS1="-Ae +DD64 +DSitanium2"
+    		LDFLAGS1="-Ae +DD64 +DSitanium2 -b"
+  		else
+    		CC1="cc -DPARISC -D__NO_EM_HDRS -D__hp9000s800"
+    		CFLAGS1="-Ae +DD64 +DS2.0"
+    		LDFLAGS1="-Ae +DD64 +DS2.0 -b"
+		fi
+  	fi
+	LD1=cc
+	LDEXTRA1="-lpthread -ldl" 
+fi
+
+
+if [ -z "$CC" ]; then
+	if [ -z "$CC1" ]; then
+		CC=gcc
+	else
+		CC=$CC1
+	fi
+fi
+
+if [ -z "$CFLAGS" ]; then
+	if [ -z "$CFLAGS1" ]; then
+		if [ ! "LUNA_CONFIG_BITS" = "LEGACY" ]; then
+			CFLAGS="-fPIC -m$LUNA_CONFIG_BITS -O3"
+		else
+			CFLAGS="-fPIC -O3"
+		fi
+	else
+		CFLAGS=$CFLAGS1
+	fi
+fi
+
+if [ -z "$LD" ]; then
+	if [ -z "$LD1" ]; then
+		LD=gcc
+	else
+		LD=$LD1
+	fi
+fi
+
+if [ -z "$LDFLAGS" ]; then
+	if [ -z "$LDFLAGS1" ]; then
+		if [ ! "LUNA_CONFIG_BITS" = "LEGACY" ]; then
+			LDFLAGS="-fPIC -m$LUNA_CONFIG_BITS -shared"
+		else
+			LDFLAGS="-fPIC -shared"
+		fi
+	else
+		LDFLAGS=$LDFLAGS1
+	fi
+fi
+
+if [ -z "$LDEXTRA" ]; then
+	if [ -z "$LDEXTRA1" ]; then
+		LDEXTRA="-ldl"
+	else
+		LDEXTRA=$lLDEXTRA1
+	fi
+fi
+ 
+if [ -z "$DEFINES" ]; then
+	# for reference, legacy defines should have no effect:
+	#   DEFINES="-DOPENSSL_PIC -DOPENSSL_THREADS -D_REENTRANT -DDSO_DLFCN -DHAVE_DLFCN_H -DTERMIO"
+	DEFINES=""
+fi
+
+echo Using compiler... CC=$CC
+echo Defines... DEFINES=$DEFINES
+echo C flags... CFLAGS=$CFLAGS
+echo Linker... LD=$LD
+echo Linker flags... LDFLAGS=$LDFLAGS
+echo Linker extras... LDEXTRA=$LDEXTRA
+echo Shared object name... LDSO=$LDSO
+
+
+sed -e "s#%INCLUDES%#$INCLUDES#g" -e "s#%LIBS%#$LIBS#g" -e "s#%CC%#$CC#g" -e "s#%DEFINES%#$DEFINES#g" -e "s#%CFLAGS%#$CFLAGS#g" -e "s#%LD%#$LD#g" -e "s#%LDFLAGS%#$LDFLAGS#g" -e "s#%LDEXTRA%#$LDEXTRA#g" -e "s#%LDSO%#$LDSO#g" makefile.in > makefile
+
+
+

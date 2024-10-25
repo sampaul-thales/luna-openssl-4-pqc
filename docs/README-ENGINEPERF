@@ -1,0 +1,82 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+README-ENGINEPERF
+
+
+  engineperf is C-language sample code showing how to
+  access Luna HSM via OpenSSL engine interface
+  and test performance thereof.
+
+  It is located at gem-samples/engineperf
+
+  engineperf depends on openssl and sautil.
+
+  sautil and openssl have locations that depend on steps followed in "README-GEMBUILD".
+
+  The Gem HSM middleware is configured according to file "README-GEM-CONFIG".
+
+
+
+INSRUCTIONS
+
+
+  STEP 1.  Build engineperf.
+
+    # ./gembuild engineperf-build
+
+
+  STEP 2. Open connection (and login).
+
+    # sautil -v -s 1 -i 10:11 -o -q
+
+
+  STEP 3. Setup and run the test.
+
+    #cd gem-samples/engineperf
+
+    # sh engineperf-test.sh --test-all --fips=1
+
+    NOTE: It may be required to export the LD_LIBRARY_PATH variable to point to the location of
+          the openssl lib directory.  E.g.  export LD_LIBRARY_PATH=/usr/local/ssl/lib
+
+    NOTE: By default engineperf will attempt to run in FIPS mode if the openssl has FIPS support.
+          If openssl hasn't been compiled with the FIPS module, this option isn't required.
+
+
+  STEP 4. You can delete temporary keys and keyfiles.
+
+    # sh engineperf-test.sh --delete-all
+
+
+
+DESCRIPTION OF PROGRAM
+
+
+  The engineperf program runs various crypto operations on the HSM and measures the performance
+  of the operations.
+
+  It tests the performance of:
+    random number generation
+    RSA sign
+    RSA verify
+    RSA encrypt with a private key
+    RSA decrypt with a public key
+    RSA encrypt with a public key
+    RSA decrypt with a private key
+    DSA sign
+    DSA verify
+    ECDSA sign
+    ECDSA verify
+
+  Below is an example line of the output and the interpretation:
+    RAND 512 bytes: 3418241 loops in 5026204 micro-seconds (680084.27992 Hz).
+
+    This means that the random number generation operation was executed
+    3418241 times in an elapsed time of 5.026204 seconds.  The effective
+    number of cycles or operations per seconds (Hz) was 680084.27992.
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

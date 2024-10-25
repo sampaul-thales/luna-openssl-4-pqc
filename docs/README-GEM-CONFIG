@@ -1,0 +1,252 @@
+
+Copyright 2009-2018 SafeNet. All rights reserved.
+
+
+
+README-GEM-CONFIG
+=================
+
+  Configuration settings for the gem engine can be modified in the Chrystoki configuration file.
+
+  The filename is "/etc/Chrystoki.conf" (on UNIX platforms)
+  and the filename is "%ChrystokiConfigurationPath%\crystoki.ini" (on Windows platform).
+
+
+
+SUPPORTED ALGORITHMS
+====================
+
+  RSA, DSA, ECDSA, Random Number Generation.
+
+
+
+HSM LOGIN OPTIONS
+=================
+
+  Application IDs (EXAMPLE 1),
+  Console Interactive Login (EXAMPLE 4a),
+  Plain Text Password in File (EXAMPLE 4b),
+  Pass DLL (EXAMPLE 4c).
+
+
+
+TABLE 1. FULL LIST OF CONFIGURATION VARIABLES
+=============================================
+
+  Below is the full list of variables.
+  These variables configure the gem engine (not the cryptoki library).
+  
+                        DEFAULT
+  VARIABLE NAME         VALUE    WHY CHANGE THIS VALUE?
+  --------------------- -------- -------------------------------------------------------
+
+MANDATORY:
+
+  LibPath...............none.....must set path to cryptoki shared library (32-bit).
+  LibPath64.............none.....must set path to cryptoki shared library (64-bit).
+  EngineInit............none.....must set authentication settings.
+
+OPTIONAL:
+
+  DisableCheckFinalize..0........set to 1 if NOT using a forking application.  See NOTE below for more details.
+  IntermediateProcesses.1........determines how many processes are between the main process and the child processes in a forking application.
+  DisableDsa............1........set to 0 if DSA in hardware is required.
+  DisableEcdsa..........1........set to 0 if ECDSA in hardware is required.
+  DisableRand...........1........set to 0 if RNG in hardware is required.
+  DisableRsa............0........set to 1 if RSA in hardware is not required.
+
+  LogLevel..............0........set to 1 for logfiles in "/<LogRootDir>/e_lunahsm/lunaerr/".
+  LogRootDir............/tmp.....set to other path if "/tmp" is not feasible.
+
+  EnableDsaEx...........1........set to 0 if cache issue (DSA key handle cache).
+  EnableEcdsaEx.........1........set to 0 if cache issue (ECDSA key handle cache).
+  EnableRsaEx...........1........set to 0 if cache issue (RSA key handle cache).
+
+  DisableMultiThread....0........set to 1 if thread-safety issue.
+  DisableSessionCache...1........set to 0 to enable session cache.
+  
+  EnableLoadPrivKey.....0........set to 1 for apps that must call "ENGINE_load_private_key" (e.g., BIND).
+  EnableLoadPubKey......0........set to 1 for apps that must call "ENGINE_load_public_key" (e.g., BIND).
+  
+  EnableRsaGenKeyPair...0........set to 1 for apps that must call "RSA_generate_key" (e.g., BIND).
+  EnableDsaGenKeyPair...0........set to 1 for apps that must call "DSA_generate_key" (e.g., BIND).
+
+  EnableLoginInit.......0........set to 1 for login via engine (i.e., instead of login via "sautil").
+
+  Appliance.............Luna.....set to KeySecure to work in KeySecure mode.
+
+NEW (for OpenSSL v1.0.0e and above)
+
+  EnablePkeyMeths.......0........set to 1 for e.g., command "openssl dgst ...".
+  EnablePkeyAsn1Meths...0........set to 1 for e.g., command "openssl dgst ...".
+  EnableDigests.........0........set to 1 for e.g., command "openssl dgst ...".
+
+NOTE:  DisableCheckFinalize can be used to alter how the engine behaves in terms of finalizing the cryptoki library.
+       If an application has forking processes, then this causes the connection with the HSM to be shared between
+       the parent and the child process which poses a problem.  If this option is set to 0 (default), when crypto calls
+       are made in the parent process, the cryptoki library is finalized after each crypto call.  However, in the child
+       process, the library is initialized and the connection to the HSM is maintained after crypto calls.  This way the
+       parent and child will have different connections to the HSM.  If this option is set to 1, the engine will
+       initialize the cryptoki library and maintain the connection to the HSM until the application terminates.  So if
+       your application or 3rd party application is using OpenSSL and has forking processes, set this value to 0.
+       Otherwise, setting the option to 1 will improve the performance.
+
+NEW (for OpenSSL v1.0.1e and above)
+
+  DisableRegisterAll....1........set to 0 for automatic loading of engine.
+
+NEW (as of OpenSSL v1.1.0)
+
+  EnableLimitedUser.....0........Set to 1 for login as Crypto-User (default is Crypto-Officer).
+                                 Note there is a corresponding change in sautil; i.e., "sautil -u ...".
+
+DEPRECATED (as of OpenSSL v1.1.0)
+
+  DisablePublicCrypto...1........As a result, public key crypto in software always.
+  EnableRsaSignVerify...0........As a result, RSA_sign redirects to RSA_private_encrypt always.
+
+
+
+EXAMPLES
+========
+
+EXAMPLE 1. configure on UNIX for slot 1, App ID 10:11 (file "/etc/Chrystoki.conf").
+
+  GemEngine = {
+     LibPath = /usr/lib/libCryptoki2.so;
+     LibPath64 = /usr/lib/libCryptoki2_64.so;
+     EngineInit = 1:10:11;
+     DisableRand = 0;
+     DisableDsa = 0;
+     DisableEcdsa = 0;
+     DisableCheckFinalize = 1;
+  }
+
+  NOTE: all variable names are case sensitive on UNIX; e.g., "Misc" and not "MISC".
+
+  NOTE: all variable definitions end with a semi-colon (";") on UNIX.
+
+  NOTE: EXAMPLE 4 gives other options for handling the HSM login.  It should be taken into
+        consideration that App IDs should be used with caution.
+
+
+
+EXAMPLE 2. configure on Windows (file "%ChrystokiConfigurationPath%\crystoki.ini").
+
+  [GemEngine]
+  LibPath = C:\Program Files\LunaSA\cryptoki.dll
+  LibPath64 = C:\Program Files\LunaSA\cryptoki_64.dll
+  EngineInit = 1:10:11
+  DisableRand = 0
+  DisableDsa = 0
+  DisableEcdsa = 0
+  DisableCheckFinalize = 1
+
+
+
+EXAMPLE 3. configure for BIND v9.7 (DNSSEC) on UNIX (file "/etc/Chrystoki.conf").
+
+  GemEngine = {
+   EnableDsaGenKeyPair = 1;
+   EnableRsaGenKeyPair = 1;
+   EnableLoadPubKey = 1;
+   EnableLoadPrivKey = 1;
+   DisableCheckFinalize = 1;
+   DisableEcdsa = 1;
+   DisableDsa = 0;
+   DisableRand = 0;
+   EngineInit = 1:10:11;
+   LibPath64 = /usr/lib/libCryptoki2_64.so;
+   LibPath = /usr/lib/libCryptoki2.so;
+  }
+
+
+
+EXAMPLE 4.
+
+  The following examples configure the engine to perform a login every time
+  your openssl-enabled application starts up.
+  
+  To avoid HSM lockout, it is recommended to specify the token label rather
+  than the slotID.
+
+
+
+EXAMPLE 4a. login via engine (interactive login via console).
+
+  This option is useful as the login information is never stored on the file system.  However it
+  may not be practical depending on the application.
+
+  GemEngine = {
+     ...
+     EngineInit = "myTokenLabel":0:0:passdev=console;
+     EnableLoginInit = 1;
+  }
+  
+  NOTE: the token label must appear within double-quotation marks.
+  NOTE: the appID 0:0 is a special case; it means do NOT call CA_SetApplicationID.
+
+
+
+EXAMPLE 4b. login via engine (plaintext password in file).
+
+  This option is simple to implement.  However this potentially exposes the partition password
+  if an attacker gained access to the file system.
+
+  GemEngine = {
+     ...
+     EngineInit = "myTokenLabel":0:0:passfile=/path/to/my/passfile;
+     EnableLoginInit = 1;
+  }
+
+
+
+EXAMPLE 4c. login via engine (plaintext password gathered from dynamic link library).
+
+  This method can provide more security than the passfile but requires custom development.
+  See docs/README-PASSDLL for a sample of doing this.
+
+  GemEngine = {
+     ...
+     EngineInit = "myTokenLabel":0:0:passdll=/path/to/my/passdll.so;
+     EnableLoginInit = 1;
+  }
+
+
+
+EXAMPLE 5.  To configure the gem engine to work in KeySecure mode.  The following are typical values.
+
+  GemEngine = {
+     ...
+     Appliance = KeySecure;
+     EngineInit = 1:0:0:passfile=/path/to/passfile;
+     EnableLoginInit = 1;
+     EnableRsaGenKeyPair = 1;
+     DisableDsa = 0;
+     DisableRand = 0;
+     EnableDsaGenKeyPair = 1;
+     LibPath64 = /path/to/libPKCS11.so;
+  }
+
+  NOTE:  The contents of the passfile should be in the following format:
+  <username>:<password>
+
+
+
+EXAMPLE 6. configure for Apache on UNIX (file "/etc/Chrystoki.conf").
+
+  GemEngine = {
+   EnableDsaGenKeyPair = 0;
+   EnableRsaGenKeyPair = 0;
+   DisableCheckFinalize = 0;
+   DisableEcdsa = 1;
+   DisableDsa = 1;
+   DisableRand = 1;
+   EngineInit = 1:10:11;
+   LibPath64 = /usr/lib/libCryptoki2_64.so;
+   LibPath = /usr/lib/libCryptoki2.so;
+  }
+
+
+
+Copyright 2009-2018 SafeNet. All rights reserved.

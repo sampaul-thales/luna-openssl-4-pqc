@@ -1,0 +1,181 @@
+Copyright (C) 2017 SafeNet, Inc. All rights reserved.
+
+
+README-BIND
+
+  "BIND" is an internet domain name server with DNS security extensions (DNSSEC).
+  
+  This readme demonstrates basic integration of a SafeNet hardware security module (HSM) with
+  BIND and OPEN-DNSSEC on a UNIX platform.
+
+PREREQUISITES:
+
+  OpenSSL and sautil must be configured and integrated with GemEngine.
+
+INSTRUCTIONS:
+
+  STEP 1.a. Download and extract the source for bind and opendnssec. The dbuild.inc under gemengine/dnssec folder refers to required software packages.
+  Place the .tar.gz files inside of the gemengine/dnssec directory.
+  Note that only libxml2 and bind are required for building only bind. For building both bind and opendnssec, refer to list of packages in dbuild.inc.
+  
+  STEP 2.a Run gembuild to build and install bind
+#./gembuild dnssec-makebind
+
+  Running the above command builds all source code related to BIND on UNIX platforms.
+
+  STEP 2.a Run gembuild to build and install opendnssec and bind
+#./gembuild dnssec-makeall
+
+  Running the above command builds all source code related to DNSSEC and BIND on UNIX platforms.
+
+NOTE 1.
+
+  It is assumed that the dnssec toolkit from SafeNet is compiled and installed completely to path "/opt/SFNTdnssec1/".
+
+  SafeNet middleware is configured for BIND/OPEN-DNSSEC.
+
+  To run these examples, please use the bourne shell (or bash).
+  You may set the environment by sourcing the script file at "/opt/SFNTdnssec1/SFNTdnssec.profile".
+
+NOTE 2.
+
+  Here is a sample zone file to sign. To run the examples, please copy and paste it to filename "foo1.example.net":
+
+	$TTL 1d
+	@ IN SOA foo1.example.net. root.example.net. (
+		2 ; Serial
+		604800 ; Refresh
+		86400 ; Retry
+		2419200 ; Expire
+		604800 ) ; Negative Cache TTL
+	;
+
+	@ IN NS foo1.example.net.
+	@ IN A 192.168.0.6
+	foo1 IN A 192.168.0.5
+	www IN A 192.168.0.7
+	gateway IN A 192.168.0.1
+
+ Either do as mentioned above or copy "foo1.example.net" from dnssec folder.
+
+EXAMPLE 1. Use command "sautil" to generate keys.
+
+  NOTE:
+    Sautil will open an application id (appId) and login once.
+    Other applications share login state by setting the same appId values.
+    The example below uses appId values "10:11".
+
+  NOTE:
+    It is critical that all keys have a unique label. By convention,
+    the private key and public key of an RSA keypair share the the same label.
+    The examples below uses label "LABELZSK1" (for ZSK) and "LABELKSK1" (for KSK).
+
+  REFERENCE:
+    See file "README-GEM-CONFIG" with config options
+    "EnableLoadPrivKey=1", and
+    "EnableLoadPubKey=1".
+
+
+  Step 1. Open appId (and login):
+
+  # sautil -v -s 1 -i 10:11 -o -q
+
+  Step 2. Generate a new RSA 1024 keypair (Zone Signing Key):
+
+  # sautil -v -s 1 -i 10:11 -f Kfoo1zsk.pem -l LABELZSK1 -g 1024
+  
+  Step 3. Generate a new RSA 2048 keypair (Key Signing Key):
+  
+  # sautil -v -s 1 -i 10:11 -f Kfoo1ksk.pem -l LABELKSK1 -g 2048
+
+  Step 4. Prove that the two new keypairs are in the HSM:
+  
+  # pkcs11-list -s 1
+
+  Step 5. Import ZSK to dnssec:
+  
+  # dnssec-keyfromlabel -E gem -l LABELZSK1 foo1.example.net
+
+  NOTE:
+  If "dnssec-keyfromlabel command is not working and returning
+  the error:
+ 
+  "dnssec-keyfromlabel: fatal: could not initialize dst: no engine"
+  
+  Modify the file
+  bind-x.x.x/bin/dnssec/dnssec-keyfromlabel.c around line 612 from
+ 
+  ret = dst_key_fromlabel(name, alg, flags, protocol,
+                  rdclass, "pkcs11", label, NULL, mctx, &key);
+
+  to
+
+  ret = dst_key_fromlabel(name, alg, flags, protocol,
+                  rdclass, engine, label, NULL, mctx, &key);
+  
+  Recompilation causes the command to work.
+  
+  Step 6. Import KSK to dnssec:
+  
+  # dnssec-keyfromlabel -E gem -fk -l LABELKSK1 foo1.example.net
+
+  Step 7. Sign the zone file (and verify):
+
+  # dnssec-signzone -v 9 -E gem -S -a foo1.example.net
+
+  Step 8. Close appId:
+  
+  # sautil -v -s 1 -i 10:11 -c
+
+EXAMPLE 2. Use command "dnssec-keygen" to generate keys.
+
+  NOTE:
+    This is the direct way to generate keys for BIND/DNSSEC.
+    However, this assumes you have the latest engine "gem"
+    from SafeNet. And, the engine is configured properly to
+    do RSA key generation via OpenSSL function "RSA_generate_key".
+
+  REFERENCE:
+    See file "README-GEM-CONFIG" with config options
+    "EnableLoadPrivKey=1", and
+    "EnableLoadPubKey=1", and
+    "EnableRsaGenKeyPair=1", and
+    "EnableDsaGenKeyPair=1".
+
+  Step 1. Open appId (and login):
+ 
+  # sautil -v -s 1 -i 10:11 -o -q
+  
+  Step 2. Generate a new Zone Signing Key:
+
+ # dnssec-keygen -v 9 -E gem -a NSEC3RSASHA1 -b 1024 foo1.example.net
+    
+  NOTE: for DSA you can specify "-a NSEC3DSA -b 1024".
+
+  Step 3. Generate a new Key Signing Key:
+
+ # dnssec-keygen -v 9 -E gem -a NSEC3RSASHA1 -b 2048 -fk foo1.example.net
+    
+  NOTE: for DSA you can specify "-a NSEC3DSA -b 1024".
+
+  Step 4. Prove that the two new keypairs are in the HSM:
+
+  # pkcs11-list -s 1
+
+  Step 5. Sign the zone file (and verify):
+
+  # dnssec-signzone -v 9 -E gem -S -a foo1.example.net
+
+  Step 6. Close appId:
+  
+  # sautil -v -s 1 -i 10:11 -c
+
+NOTE 3.
+  Run gembuild to clean bind
+#./gembuild dnssec-clean
+
+NOTE 4.
+  Run gembuild to clean all
+#./gembuild dnssec-cleanall
+
+Copyright (C) 2017 SafeNet, Inc. All rights reserved.

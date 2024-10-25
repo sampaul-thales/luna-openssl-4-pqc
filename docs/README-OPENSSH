@@ -1,0 +1,195 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+PURPOSE
+
+
+  Build OpenSSH with engine support or attempt to use existing OpenSSH installation and integrate with gem engine.
+
+  The result is an SSH server that can support an HSM via dynamically-loadable engine module where keys are stored
+  in hardware and crypto operations are performed in hardware.
+
+
+
+PROCEDURES
+
+
+  If you have followed the instructions README-GEMBUILD using SCENARIO A or B then is it may be possible
+  to use your system's existing ssh installation.  If that is the case use PROCEDURE A, otherwise use PROCEDURE B.
+  
+
+
+PROCEDURE A - Integration with an existing system OpenSSH installation.
+
+
+  This procedure assumes that sshd_conf is located in /etc/ssh.
+  
+  WARNING:  If this procedure is not successful ssh access to the host could be broken.
+            Ensure that there is an alternative method to gain access to the host before attempting this procedure.
+
+  NOTE:  This procedure will not work unless the existing OpenSSH installation has been compiled using the --with-ssl-engine option.
+         It may be required to use SCENARIO C from README-GEMBUILD along with PROCEDURE B in this document.
+
+
+  STEP 1. Follow the instructions in "README-OPENSSL-CONFIG" so that the gem engine is loaded automatically if not already done.
+
+
+  STEP 2. Put Configuration settings in the /etc/Chrystoki.conf file (See README-GEM-CONFIG).
+
+    An example if using passdll (passfile configuration is similar):
+
+    GemEngine = {
+      EngineInit=1:0:0:passdll=/path/to/my/passdll.so;
+      EnableLoginInit = 1;
+      EnableRsaGenKeyPair = 1;
+      EnableDsaGenKeyPair = 1;
+      DisableRand = 0;
+      DisableDsa = 0;
+      DisableEcdsa = 0;
+      DisableCheckFinalize = 0;
+      LibPath64 = /usr/lib/libCryptoki2_64.so;
+      LibPath = /usr/lib/libCryptoki2.so;
+    };
+
+    An example if using Application IDs and sautil:
+
+    GemEngine = {
+      EngineInit=1:10:11;
+      EnableRsaGenKeyPair = 1;
+      EnableDsaGenKeyPair = 1;
+      DisableRand = 0;
+      DisableDsa = 0;
+      DisableEcdsa = 0;
+      DisableCheckFinalize = 0;
+      LibPath64 = /usr/lib/libCryptoki2_64.so;
+      LibPath = /usr/lib/libCryptoki2.so;
+    };
+
+
+  STEP 3. Generate keys with ssh-keygen.
+
+    # ssh-keygen -t rsa -f /etc/ssh/ssh_host_gem_rsa_key -N ""
+
+    # ssh-keygen -t dsa -f /etc/ssh/ssh_host_gem_dsa_key -N ""
+
+    If ECDSA is required, the keys must be generated using sautil (See README-ECDSA):
+
+    # sautil -v -s 1 -i 10:11 -o -q
+
+    # sautil -v -s 1 -i 10:11 -m OID_X9_62_prime256v1 -f /etc/ssh/ssh_host_gem_ecdsa_key
+
+    # sautil -v -s 1 -i 10:11 -c
+
+
+  STEP 4. Add configuration HostKey lines to /etc/ssh/sshd_conf and comment out any existing HostKey lines.
+
+    #HostKey /etc/ssh/ssh_host_rsa_key
+    #HostKey /etc/ssh/ssh_host_dsa_key
+    #HostKey /etc/ssh/ssh_host_ecdsa_key
+    HostKey /etc/ssh/ssh_host_gem_rsa_key
+    HostKey /etc/ssh/ssh_host_gem_dsa_key
+    HostKey /etc/ssh/ssh_host_gem_ecdsa_key #Don't add this line if not using ECDSA in STEP 2
+
+
+  STEP 5. Restart the sshd service.
+
+  NOTE:  If selinux is enabled, it may prevent the sshd from working as it needs to make a TCP/IP connection to the HSM which
+         selinux is not expecting and will deny.
+
+
+
+PROCEDURE B - Integration of OpenSSL with OpenSSH installation compiled from source.
+
+
+  NOTE:  This assumes that OpenSSL has been compiled and installed from source using SCENARIO C in README-GEMBUILD.
+
+
+  STEP 1. Download the OpenSSH source from http://www.openssh.com and extract the tar.gz file.
+
+    # tar xvfz openssh-7.1p1.tar.gz
+
+    # cd openssh-7.1p1
+
+
+  STEP 2. Add the OpenSSL lib directory to the LD_LIBRARY_PATH.
+
+    # export LD_LIBRARY_PATH=/usr/local/ssl/lib
+
+
+  STEP 3. Configure, compile and install OpenSSH with engine support.
+
+    # ./configure --prefix=/lunasshd  --exec-prefix=/lunasshd \
+     --datarootdir=/lunasshd/share \
+     --docdir=/lunasshd/doc/openssh \
+     --with-ssl-engine  --with-ssl-dir=/usr/local/ssl
+
+    # make
+
+    # make install
+
+
+  STEP 4. Edit the file '/usr/local/ssl/openssl.cnf' to load engine automatically.
+
+    # Insert near top of file openssl.cnf:
+    openssl_conf = openssl_init
+
+
+    # Insert at bottom of file openssl.cnf:
+    [ openssl_init ]
+    engines = engine_section 
+
+    [ engine_section ]
+    gem = gem_section
+
+    [ gem_section ]
+    dynamic_path = /usr/local/ssl/lib/engines/libgem.so
+    default_algorithms = ALL 
+
+
+  STEP 5. Put Configuration settings in the /etc/Chrystoki.conf file.
+
+    Follow STEP 2 in PROCEDURE A.
+
+
+  STEP 6. Generate keys in HSM (RSA and DSA only).
+
+    # /lunasshd/bin/ssh-keygen -t rsa -f /lunasshd/etc/ssh_host_rsa_key -N ""
+
+    # /lunasshd/bin/ssh-keygen -t dsa -f /lunasshd/etc/ssh_host_dsa_key -N ""
+
+
+    If ECDSA is required, the keys must be generated using sautil (See README-ECDSA):
+
+    # sautil -v -s 1 -i 10:11 -o -q
+
+    # sautil -v -s 1 -i 10:11 -m OID_X9_62_prime256v1 -f /lunasshd/etc/ssh_host_ecdsa_key
+
+    # sautil -v -s 1 -i 10:11 -c
+
+
+  STEP 7.
+
+      For OpenSSH here is a working example of the luna config file "/etc/Chrystoki.conf"
+      section "EngineLunaCA3"; e.g.,
+
+
+        GemEngine = {
+          LibPath = /usr/safenet/lunaclient/lib/libCryptoki2.so;
+          EngineInit = 1:10:11;
+          DisableRand = 0;
+          DisableDsa = 0;
+          DisableEcdsa = 0;
+          DisableCheckFinalize = 1;
+          EnableRsaGenKeyPair = 1;
+          EnableDsaGenKeyPair = 1;
+        }
+
+
+  STEP 8. Start the sshd service on the port of your choice.
+
+    # /lunasshd/sbin/sshd -p <port>
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.

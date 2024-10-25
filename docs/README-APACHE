@@ -1,0 +1,65 @@
+Copyright (C) 2017 SafeNet, Inc. All rights reserved.
+
+README-APACHE
+
+PREREQUISITES:
+
+  OpenSSL must be configured and integrated with GemEngine.
+
+INSTRUCTIONS:
+
+  STEP 1.a. Download and extract an apache(httpd) source tarball from https://httpd.apache.org/download.cgi
+  and place the .tar.gz file inside of the gemengine directory.
+
+   Example:
+   Download httpd-2.4.25.tar.gz and extract:
+#tar xzvf httpd-2.4.25.tar.gz
+
+  STEP 1.b. Download and extract an apr source tarball from https://apr.apache.org/download.cgi
+  and place the .tar.gz file inside of the gemengine directory.
+
+   Example:
+   Download apr-1.5.2.tar.gz and extract:
+#tar xzvf apr-1.5.2.tar.gz
+
+  STEP 1.c. Download and extract an apr util source tarball from https://apr.apache.org/download.cgi
+  and place the .tar.gz file inside of the gemengine directory.
+
+  Example:
+  Download apr-iconv-1.2.1.tar.gz and extract:
+#tar xzvf apr-iconv-1.2.1.tar.gz
+
+  STEP 1.d. Download and extract an apr iconv source tarball from https://apr.apache.org/download.cgi
+  and place the .tar.gz file inside of the gemengine directory.
+
+  Example:
+  Download apr-util-1.5.4.tar.gz and extract:
+#tar xzvf apr-util-1.5.4.tar.gz
+
+  STEP 2. Run the gembuild command and set the following parameters for the location of the above source
+
+   "--apache-source=<httpd-src>    Directory where the apache source has been extracted"
+   "--apr-source=<apr-src>         Directory where the apr source has been extracted"
+
+   "--apr-util-source=<utilsrc>    Directory where the apr util source has been extracted"
+
+   "--apache-keys-validity=<Days>  Number of days Apache RSA keys will be valid for "
+
+   Example:
+./gembuild config --apache-source=<httpd-src> --apr-source=<apr-src> --apr-iconv-source=<iconvsrc> --apr-util-source=<utilsrc>
+    --openssl-source=<openssl-source> --config-bits=64 --prefix=/usr/local
+
+  STEP 3. Run gembuild to build and install apache
+#./gembuild apache-build
+
+  STEP 4. Run gembuild to generate RSA keys for apache
+#./gembuild apache-genrsa
+
+   STEP 5.a Traverse to apache installation directory, update apache configuration file (httpd.conf) and edit the ServerName field with the hostname or IP address of the server 
+   with the value specified for the CN in the certificate created in step 4.
+
+   STEP 5.b Traverse to apache installation directory for extra configuration (for e.g. /usr/local/apache2/conf/extra), update httpd-ssl.conf and edit the Virtual Host section as below:
+
+#<Virtual Host Hostname or IP Address: 443>
+
+Copyright (C) 2017 SafeNet, Inc. All rights reserved.

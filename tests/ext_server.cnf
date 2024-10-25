@@ -1,0 +1,9 @@
+extensions = x509v3
+[ x509v3 ]
+#basicConstraints=CA:FALSE
+subjectKeyIdentifier=hash
+authorityKeyIdentifier=keyid,issuer
+keyUsage=digitalSignature,keyAgreement
+extendedKeyUsage=serverAuth
+#subjectAltName=DNS:VirtualHost0
+#subjectAltName=IP:127.0.0.1

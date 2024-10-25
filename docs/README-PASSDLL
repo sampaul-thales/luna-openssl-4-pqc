@@ -1,0 +1,51 @@
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
+
+
+
+README-PASSDLL
+
+
+  passdll is a feature whereby the gem engine retrieves a
+  password from a shared-object (dynamic library).
+
+  sample_passdll is a C-language sample showing how to 
+  implement the passdll feature.
+
+
+
+INSTRUCTIONS
+
+
+  STEP 1. Customize the sample passdll program.
+
+    gem-samples/passdll/sample_passdll.c contains three defines for MY_XOR_PIN, MY_XOR_PAD, MY_PIN_LEN.  These values
+    should be modified to reflect the partition password and different random values should be chosen.
+    This example prevents the partition password from being stored as plaintext in the shared object.
+
+  NOTE:  This sample is not considered secure as it could easily be reverse engineered.  Customization
+         should be done for a real-world implementation that provides adequate security.  The sample is
+         only meant to provide an example of how to use the passdll api with the OpenSSL gem engine.
+
+
+  STEP 2. Build the sample passdll (UNIX).
+
+    # cd gem-samples/passdll
+
+    # make clean
+
+    # make
+
+    # file sample_passdll.so
+
+
+  STEP 3. Configure the /etc/Chrystoki.conf configuration file to enable passdll (UNIX).
+
+    GemEngine = {
+      ...
+      EngineInit = 1:0:0:passdll=/path/to/my/sample_passdll.so;
+      EnableLoginInit = 1;
+    }
+
+
+
+Copyright (C) 2015 SafeNet, Inc. All rights reserved.
