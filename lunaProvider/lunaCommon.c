@@ -2712,6 +2712,8 @@ int luna_prov_ECDH_compute_key_ex(
             int flagCofactor = 0;
             if (EC_KEY_get_flags(eckey) & EC_FLAG_COFACTOR_ECDH)
                 flagCofactor = 1;
+            /* NOTE: copy 'count_c_init' otherwise error with message "key handle is stale" */
+            keyctx.count_c_init = keyinfo.sess.count_c_init;
             /* FIXME: OPTIMIZATION: I suspect eckey was duplicated however the cached hsm object handles were not; libssl is to blame? */
             keyctx.hPrivate = luna_find_ecdsa_handle_FAST(&keyinfo.sess, eckey, 1);
             if (keyctx.hPrivate == 0)
