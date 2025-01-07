@@ -878,7 +878,7 @@ static OQSX_KEY *oqsx_key_op(const X509_ALGOR *palg, const unsigned char *p,
                     memcpy(pubkey + SIZE_OF_UINT32
                                + key->evp_info->length_public_key,
                            p + actualprivkeylen, plen - actualprivkeylen);
-                } else
+                } else {
                     // coverity: overflowed value 'plen - key->privkeylen'
                     if (plen < 1 || plen > OQS_PROV_MAX_BUFFER)
                         goto err_key_op;
@@ -886,6 +886,7 @@ static OQSX_KEY *oqsx_key_op(const X509_ALGOR *palg, const unsigned char *p,
                         goto err_key_op;
                     memcpy(key->pubkey, p + key->privkeylen,
                            plen - key->privkeylen);
+                }
 #endif
             }
         }
