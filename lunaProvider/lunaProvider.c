@@ -771,6 +771,7 @@ static const OSSL_PARAM luna_param_types[] = {
     OSSL_PARAM_END
 };
 
+#ifdef LUNA_OQS
 // get the last number on the composite OID
 int get_composite_idx(int idx)
 {
@@ -796,6 +797,7 @@ int get_composite_idx(int idx)
     }
     return ret;
 }
+#endif
 
 static const OSSL_PARAM *luna_gettable_params(void *provctx)
 {
@@ -892,10 +894,12 @@ static const OSSL_ALGORITHM luna_kdfs[] = {
 
 // list of key exchange algorithms reported to application
 static const OSSL_ALGORITHM luna_keyexch[] = {
+#ifdef LUNA_OQS
 #ifndef OPENSSL_NO_EC
     { PROV_NAMES_ECDH, LUNA_PROV_EQUALS_SZ, luna_ecdh_keyexch_functions },
     { PROV_NAMES_X25519, LUNA_PROV_EQUALS_SZ, luna_x25519_keyexch_functions },
     { PROV_NAMES_X448, LUNA_PROV_EQUALS_SZ, luna_x448_keyexch_functions },
+#endif
 #endif
     // NOTE: { PROV_NAMES_HKDF, LUNA_PROV_EQUALS_SZ, luna_ossl_kdf_hkdf_keyexch_functions },
     { NULL, NULL, NULL }
@@ -920,9 +924,11 @@ static const OSSL_ALGORITHM luna_signature[] = {
 #endif
     { PROV_NAMES_RSA, LUNA_PROV_EQUALS_SZ, luna_rsa_signature_functions },
 #ifndef OPENSSL_NO_EC
+#ifdef LUNA_OQS
     { PROV_NAMES_ED25519, LUNA_PROV_EQUALS_SZ, luna_ed25519_signature_functions },
     { PROV_NAMES_ED448, LUNA_PROV_EQUALS_SZ, luna_ed448_signature_functions },
     { PROV_NAMES_ECDSA, LUNA_PROV_EQUALS_SZ, luna_ec_signature_functions },
+#endif /* LUNA_OQS */
 # ifndef OPENSSL_NO_SM2
     //{ PROV_NAMES_SM2, LUNA_PROV_EQUALS_SZ, luna_sm2_signature_functions },
 # endif
@@ -1070,6 +1076,7 @@ static const OSSL_ALGORITHM luna_keymgmt[] = {
 #ifndef OPENSSL_NO_EC
     { PROV_NAMES_EC, LUNA_PROV_EQUALS_SZ, luna_ec_keymgmt_functions,
       PROV_DESCS_EC },
+# ifdef LUNA_OQS
 # ifndef OPENSSL_NO_ECX
     { PROV_NAMES_X25519, LUNA_PROV_EQUALS_SZ, luna_x25519_keymgmt_functions, PROV_DESCS_X25519 },
     { PROV_NAMES_X448, LUNA_PROV_EQUALS_SZ, luna_x448_keymgmt_functions, PROV_DESCS_X448 },
@@ -1078,6 +1085,7 @@ static const OSSL_ALGORITHM luna_keymgmt[] = {
     { PROV_NAMES_ED448, LUNA_PROV_EQUALS_SZ, luna_ed448_keymgmt_functions,
       PROV_DESCS_ED448 },
 # endif /* OPENSSL_NO_ECX */
+#endif /* LUNA_OQS */
 #endif /* OPENSSL_NO_EC */
 #ifndef OPENSSL_NO_SM2
     //{ PROV_NAMES_SM2, LUNA_PROV_EQUALS_SZ, luna_sm2_keymgmt_functions, PROV_DESCS_SM2 },
@@ -1371,8 +1379,10 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
 
     LUNA_PRINTF(("loading...\n"));
 
+#ifdef LUNA_OQS
     // init liboqs
     OQS_init();
+#endif
 
     if (!ossl_prov_bio_from_dispatch(in))
         goto end_init;

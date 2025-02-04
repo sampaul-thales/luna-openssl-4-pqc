@@ -486,9 +486,11 @@ static int luna_dsa_get_ctx_params(void *vpdsactx, OSSL_PARAM *params)
     if (p != NULL && !OSSL_PARAM_set_utf8_string(p, pdsactx->mdname))
         return 0;
 
+#ifdef LUNA_OQS
     p = OSSL_PARAM_locate(params, OSSL_SIGNATURE_PARAM_NONCE_TYPE);
     if (p != NULL && !OSSL_PARAM_set_uint(p, pdsactx->nonce_type))
         return 0;
+#endif
 
     return 1;
 }
@@ -496,7 +498,9 @@ static int luna_dsa_get_ctx_params(void *vpdsactx, OSSL_PARAM *params)
 static const OSSL_PARAM known_gettable_ctx_params[] = {
     OSSL_PARAM_octet_string(OSSL_SIGNATURE_PARAM_ALGORITHM_ID, NULL, 0),
     OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_DIGEST, NULL, 0),
+#ifdef LUNA_OQS
     OSSL_PARAM_uint(OSSL_SIGNATURE_PARAM_NONCE_TYPE, NULL),
+#endif
     OSSL_PARAM_END
 };
 
@@ -534,10 +538,12 @@ static int luna_dsa_set_ctx_params(void *vpdsactx, const OSSL_PARAM params[])
         if (!luna_dsa_setup_md(pdsactx, mdname, mdprops))
             return 0;
     }
+#ifdef LUNA_OQS
     p = OSSL_PARAM_locate_const(params, OSSL_SIGNATURE_PARAM_NONCE_TYPE);
     if (p != NULL
         && !OSSL_PARAM_get_uint(p, &pdsactx->nonce_type))
         return 0;
+#endif
 
     return 1;
 }
@@ -545,7 +551,9 @@ static int luna_dsa_set_ctx_params(void *vpdsactx, const OSSL_PARAM params[])
 static const OSSL_PARAM settable_ctx_params[] = {
     OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_DIGEST, NULL, 0),
     OSSL_PARAM_utf8_string(OSSL_SIGNATURE_PARAM_PROPERTIES, NULL, 0),
+#ifdef LUNA_OQS
     OSSL_PARAM_uint(OSSL_SIGNATURE_PARAM_NONCE_TYPE, NULL),
+#endif
     OSSL_PARAM_END
 };
 
@@ -642,6 +650,9 @@ const OSSL_DISPATCH luna_dsa_signature_functions[] = {
       (void (*)(void))luna_dsa_set_ctx_md_params },
     { OSSL_FUNC_SIGNATURE_SETTABLE_CTX_MD_PARAMS,
       (void (*)(void))luna_dsa_settable_ctx_md_params },
+#ifdef LUNA_OQS
     OSSL_DISPATCH_END
+#else
+    { 0, NULL }
+#endif
 };
-

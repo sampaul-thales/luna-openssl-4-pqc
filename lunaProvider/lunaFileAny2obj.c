@@ -250,6 +250,7 @@ static int pvk2obj_decode(void *provctx, OSSL_CORE_BIO *cin, int selection,
     return 0;
 }
 
+#ifdef LUNA_OQS
 #define MAKE_DECODER(fromtype, objtype)                                      \
     static const OSSL_DISPATCH fromtype##_to_obj_decoder_functions[] = {     \
         { OSSL_FUNC_DECODER_NEWCTX, (void (*)(void))any2obj_newctx },        \
@@ -257,6 +258,15 @@ static int pvk2obj_decode(void *provctx, OSSL_CORE_BIO *cin, int selection,
         { OSSL_FUNC_DECODER_DECODE, (void (*)(void))fromtype##2obj_decode }, \
         OSSL_DISPATCH_END                                                    \
     }
+#else
+#define MAKE_DECODER(fromtype, objtype)                                      \
+    static const OSSL_DISPATCH fromtype##_to_obj_decoder_functions[] = {     \
+        { OSSL_FUNC_DECODER_NEWCTX, (void (*)(void))any2obj_newctx },        \
+        { OSSL_FUNC_DECODER_FREECTX, (void (*)(void))any2obj_freectx },      \
+        { OSSL_FUNC_DECODER_DECODE, (void (*)(void))fromtype##2obj_decode }, \
+        { 0, NULL }                                                          \
+    }
+#endif /* LUNA_OQS */
 
 MAKE_DECODER(der, OSSL_OBJECT_UNKNOWN);
 MAKE_DECODER(msblob, OSSL_OBJECT_PKEY);

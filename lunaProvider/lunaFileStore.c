@@ -24,7 +24,9 @@
 #include <openssl/proverr.h>
 #include <openssl/store.h>       /* The OSSL_STORE_INFO type numbers */
 
-//#include "internal/cryptlib.h"
+#ifndef LUNA_OQS
+#include "internal/cryptlib.h"
+#endif
 #include "internal/o_dir.h"
 #include "crypto/decoder.h"
 //#include "crypto/ctype.h"        /* ossl_isdigit() */
@@ -227,6 +229,7 @@ static void *file_open(void *provctx, const char *uri)
      * There's a special case if the URI also contains an authority, then
      * the full URI shouldn't be used as a path anywhere.
      */
+#ifdef LUNA_OQS
     if (CHECK_AND_SKIP_CASE_PREFIX(p, "file:")) {
         q = p;
         if (CHECK_AND_SKIP_CASE_PREFIX(q, "//")) {
@@ -256,7 +259,7 @@ static void *file_open(void *provctx, const char *uri)
 #endif
         path_data[path_data_n++].path = p;
     }
-
+#endif /* LUNA_OQS */
 
     for (i = 0, path = NULL; path == NULL && i < path_data_n; i++) {
         /*
@@ -445,6 +448,7 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
             if (pktype == EVP_PKEY_ED25519 || pktype == EVP_PKEY_ED448
                     || pktype == EVP_PKEY_X25519 || pktype == EVP_PKEY_X448) {
                 const ECX_KEY *ecx = NULL;
+#ifdef LUNA_OQS
                 LUNA_PRINTF(("luna_prov_ecx_fix_public...\n"));
                 if (pktype == EVP_PKEY_ED25519) {
                     ecx = ossl_evp_pkey_get1_ED25519(pk);
@@ -458,6 +462,7 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
                 LUNA_ASSERT(ecx != NULL);
                 (void)luna_prov_ecx_fix_public((ECX_KEY *)ecx);
                 LUNA_PRINTF(("luna_prov_ecx_fix_public... ok.\n"));
+#endif
 
                 /* NOTE: We must create a new EVP_PKEY that is associated with our provider.
                  * Otherwise, the ecx_backend will clobber the public key using the EVP_PKEY
@@ -913,7 +918,11 @@ const OSSL_DISPATCH luna_file_store_functions[] = {
     { OSSL_FUNC_STORE_LOAD, (void (*)(void))file_load },
     { OSSL_FUNC_STORE_EOF, (void (*)(void))file_eof },
     { OSSL_FUNC_STORE_CLOSE, (void (*)(void))file_close },
+#ifdef LUNA_OQS
     OSSL_DISPATCH_END,
+#else
+    { 0, NULL }
+#endif
 };
 
 
