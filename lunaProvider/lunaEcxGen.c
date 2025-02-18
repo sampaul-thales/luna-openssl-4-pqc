@@ -6,7 +6,7 @@
  * in the file LICENSE in the source distribution or at
  * https://www.openssl.org/source/license.html
  */
-#ifdef LUNA_OQS
+
 #include <assert.h>
 #include <string.h>
 #include <openssl/core_dispatch.h>
@@ -1190,4 +1190,3 @@ static int luna_ecx_key_pairwise_check(const ECX_KEY *ecx, int type)
     }
     return 0;
 }
-#endif /* LUNA_OQS */

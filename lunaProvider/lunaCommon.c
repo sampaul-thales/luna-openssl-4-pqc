@@ -2830,9 +2830,9 @@ end:
 }
 
 
+
 /* ECX/ED wrapper functions */
 
-#ifdef LUNA_OQS
 static
 int luna_prov_ecx_public_from_private_sw(struct ecx_gen_ctx *gctx,
         ECX_KEY *key, unsigned char *privkey) {
@@ -3201,4 +3201,4 @@ int luna_prov_ecx_compute_key(luna_prov_key_ctx *keyctx,
         in, inlen);
     return rc == LUNA_OQS_OK ? 1 : 0;
 }
-#endif
+

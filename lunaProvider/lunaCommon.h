@@ -27,9 +27,7 @@
 #include "prov/provider_util.h"
 #include "prov/securitycheck.h"
 #include "prov/seeding.h"
-#ifdef LUNA_OQS
 #include "prov/ecx.h"
-#endif
 
 /* TODO: generated when building openssl */
 #include "prov/der_rsa.h"
@@ -73,7 +71,6 @@ extern const OSSL_DISPATCH luna_ec_keymgmt_functions[];
 extern const OSSL_DISPATCH luna_ecdh_keyexch_functions[];
 extern const OSSL_DISPATCH luna_dsa_signature_functions[];
 extern const OSSL_DISPATCH luna_dsa_keymgmt_functions[];
-#ifdef LUNA_OQS
 extern const OSSL_DISPATCH luna_ed25519_signature_functions[];
 extern const OSSL_DISPATCH luna_ed448_signature_functions[];
 extern const OSSL_DISPATCH luna_ed25519_keymgmt_functions[];
@@ -82,7 +79,6 @@ extern const OSSL_DISPATCH luna_x25519_keymgmt_functions[];
 extern const OSSL_DISPATCH luna_x448_keymgmt_functions[];
 extern const OSSL_DISPATCH luna_x25519_keyexch_functions[];
 extern const OSSL_DISPATCH luna_x448_keyexch_functions[];
-#endif
 
 /* minimal definitions shared outside luna-provider */
 #include "luna_prov_minimal.h"
@@ -151,7 +147,6 @@ int luna_prov_ECDH_compute_key_ex(void *out, size_t outlen, const EC_KEY *peer_k
                                    size_t *outlen));
 int luna_prov_EC_GROUP_cmp(const EC_GROUP *a, const EC_GROUP *b, BN_CTX *ctx);
 
-#ifdef LUNA_OQS
 /* ECX/ED wrapper functions */
 typedef struct ecx_gen_ctx {
     OSSL_LIB_CTX *libctx;
@@ -222,7 +217,6 @@ typedef struct {
 
 int luna_prov_ecx_compute_key(luna_prov_key_ctx *keyctx,
                          unsigned char *secret, size_t *secretlen, size_t outlen);
-#endif
 
 /*
  * digest wrapper functions

@@ -720,11 +720,7 @@ const OSSL_DISPATCH luna_dsa_keymgmt_functions[] = {
     { OSSL_FUNC_KEYMGMT_EXPORT, (void (*)(void))luna_dsa_export },
     { OSSL_FUNC_KEYMGMT_EXPORT_TYPES, (void (*)(void))luna_dsa_export_types },
     { OSSL_FUNC_KEYMGMT_DUP, (void (*)(void))luna_dsa_dup },
-#ifdef LUNA_OQS
     OSSL_DISPATCH_END
-#else
-    { 0, NULL }
-#endif
 };
 
 static
