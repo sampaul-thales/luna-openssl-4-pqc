@@ -23,8 +23,9 @@
 #include <openssl/decoder.h>
 #include <openssl/proverr.h>
 #include <openssl/store.h>       /* The OSSL_STORE_INFO type numbers */
-
-//#include "internal/cryptlib.h"
+#ifndef LUNA_OQS
+#include "internal/cryptlib.h"
+#endif
 #include "internal/o_dir.h"
 #include "crypto/decoder.h"
 //#include "crypto/ctype.h"        /* ossl_isdigit() */
@@ -200,6 +201,14 @@ static void *file_open_dir(const char *path, const char *uri, void *provctx)
     return NULL;
 }
 
+#ifndef LUNA_OQS
+/* Check if the string literal |p| is a case-insensitive prefix of |s| */
+#define HAS_CASE_PREFIX(s, p) (OPENSSL_strncasecmp(s, p "", sizeof(p) - 1) == 0)
+/* As before, and if check succeeds, advance |str| past the prefix |pre| */
+#define CHECK_AND_SKIP_CASE_PREFIX(str, pre) \
+	    (HAS_CASE_PREFIX(str, pre) ? ((str) += sizeof(pre) - 1, 1) : 0)
+/* Check if the string literal |suffix| is a case-insensitive suffix of |str| */
+#endif //ifndef LUNA_OQS
 static void *file_open(void *provctx, const char *uri)
 {
     struct file_ctx_st *ctx = NULL;
@@ -256,7 +265,6 @@ static void *file_open(void *provctx, const char *uri)
 #endif
         path_data[path_data_n++].path = p;
     }
-
 
     for (i = 0, path = NULL; path == NULL && i < path_data_n; i++) {
         /*
@@ -445,6 +453,7 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
             if (pktype == EVP_PKEY_ED25519 || pktype == EVP_PKEY_ED448
                     || pktype == EVP_PKEY_X25519 || pktype == EVP_PKEY_X448) {
                 const ECX_KEY *ecx = NULL;
+#ifdef LUNA_OQS
                 LUNA_PRINTF(("luna_prov_ecx_fix_public...\n"));
                 if (pktype == EVP_PKEY_ED25519) {
                     ecx = ossl_evp_pkey_get1_ED25519(pk);
@@ -458,6 +467,7 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
                 LUNA_ASSERT(ecx != NULL);
                 (void)luna_prov_ecx_fix_public((ECX_KEY *)ecx);
                 LUNA_PRINTF(("luna_prov_ecx_fix_public... ok.\n"));
+#endif
 
                 /* NOTE: We must create a new EVP_PKEY that is associated with our provider.
                  * Otherwise, the ecx_backend will clobber the public key using the EVP_PKEY

@@ -7,6 +7,7 @@
  * https://www.openssl.org/source/license.html
  */
 
+#ifdef LUNA_OQS
 #include <openssl/crypto.h>
 #include <openssl/core_dispatch.h>
 #include <openssl/core_names.h>
@@ -807,3 +808,4 @@ static int s390x_ed448_digestverify(const ECX_KEY *edkey,
 }
 
 #endif /* S390X_EC_ASM */
+#endif /* LUNA_OQS */

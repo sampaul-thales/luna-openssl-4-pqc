@@ -7,6 +7,7 @@
  * https://www.openssl.org/source/license.html
  */
 
+#ifdef LUNA_OQS
 #include <openssl/crypto.h>
 #include <openssl/core_dispatch.h>
 #include <openssl/core_names.h>
@@ -215,3 +216,4 @@ const OSSL_DISPATCH luna_x448_keyexch_functions[] = {
     { OSSL_FUNC_KEYEXCH_DUPCTX, (void (*)(void))ecx_dupctx },
     OSSL_DISPATCH_END
 };
+#endif /* LUNA_OQS */
