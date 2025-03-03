@@ -2412,8 +2412,8 @@ int LUNAPROV_EVP_MD_CTX_set_params(LUNAPROV_EVP_MD_CTX *ctx, const OSSL_PARAM pa
 
 static int luna_prov_is_ecdh_len(size_t len)
 {
-    /* NOTE: p521, p384, p256 */
-    if (len == 66 || len == 48 || len == 32)
+    /* NOTE: p521, p384, p256, bp512, x448 */
+    if (len == 66 || len == 48 || len == 32 || len == 64 || len == 56)
         return 1;
     return 0;
 }
