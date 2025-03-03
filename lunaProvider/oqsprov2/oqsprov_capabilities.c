@@ -24,6 +24,20 @@
 
 #include "oqs_prov.h"
 
+// tlsgroups.h
+# define OSSL_TLS_GROUP_ID_secp256r1        0x0017
+# define OSSL_TLS_GROUP_ID_secp384r1        0x0018
+# define OSSL_TLS_GROUP_ID_secp521r1        0x0019
+# define OSSL_TLS_GROUP_ID_brainpoolP256r1  0x001A
+# define OSSL_TLS_GROUP_ID_brainpoolP384r1  0x001B
+# define OSSL_TLS_GROUP_ID_brainpoolP512r1  0x001C
+# define OSSL_TLS_GROUP_ID_x25519           0x001D
+# define OSSL_TLS_GROUP_ID_x448             0x001E
+
+// enable old tls groups, consistent with pqc hybrid
+#define LUNA_TLS_GROUPS_OLD 1
+
+// group constant
 typedef struct oqs_group_constants_st {
     unsigned int group_id; /* Group ID */
     unsigned int secbits;  /* Bits of security */
@@ -109,6 +123,20 @@ static OQS_GROUP_CONSTANTS oqs_group_list[] = {
 
     {0x2F46, 256, TLS1_3_VERSION, 0, -1, -1, 1},
     ///// OQS_TEMPLATE_FRAGMENT_GROUP_ASSIGNMENTS_END
+
+#ifdef LUNA_TLS_GROUPS_OLD
+    #define LUNA_GRP0 53
+    // compile ALL of the groups here
+    { OSSL_TLS_GROUP_ID_secp256r1, 128, TLS1_VERSION, 0, DTLS1_VERSION, 0, 0 }, // [53]
+    { OSSL_TLS_GROUP_ID_secp384r1, 192, TLS1_VERSION, 0, DTLS1_VERSION, 0, 0 },
+    { OSSL_TLS_GROUP_ID_secp521r1, 256, TLS1_VERSION, 0, DTLS1_VERSION, 0, 0 },
+    { OSSL_TLS_GROUP_ID_brainpoolP256r1, 128, TLS1_VERSION, TLS1_2_VERSION, DTLS1_VERSION, DTLS1_2_VERSION, 0 },
+    { OSSL_TLS_GROUP_ID_brainpoolP384r1, 192, TLS1_VERSION, TLS1_2_VERSION, DTLS1_VERSION, DTLS1_2_VERSION, 0 },
+    { OSSL_TLS_GROUP_ID_brainpoolP512r1, 256, TLS1_VERSION, TLS1_2_VERSION, DTLS1_VERSION, DTLS1_2_VERSION, 0 },
+    { OSSL_TLS_GROUP_ID_x25519, 128, TLS1_VERSION, 0, DTLS1_VERSION, 0, 0 },
+    { OSSL_TLS_GROUP_ID_x448, 224, TLS1_VERSION, 0, DTLS1_VERSION, 0, 0 },
+#endif
+
 };
 
 // Adds entries for tlsname, `ecx`_tlsname and `ecp`_tlsname
@@ -255,6 +283,22 @@ static const OSSL_PARAM oqs_param_group_list[][11] = {
     OQS_GROUP_ENTRY(p521_hqc256, p521_hqc256, p521_hqc256, 52),
 #endif
     ///// OQS_TEMPLATE_FRAGMENT_GROUP_NAMES_END
+
+#ifdef LUNA_TLS_GROUPS_OLD
+    // compile all or some of the groups here
+    OQS_GROUP_ENTRY(secp256r1, prime256v1, EC, LUNA_GRP0+0),
+    OQS_GROUP_ENTRY(P-256, prime256v1, EC, LUNA_GRP0+0), /* Alias of above */
+    OQS_GROUP_ENTRY(secp384r1, secp384r1, EC, LUNA_GRP0+1),
+    OQS_GROUP_ENTRY(P-384, secp384r1, EC, LUNA_GRP0+1), /* Alias of above */
+    OQS_GROUP_ENTRY(secp521r1, secp521r1, EC, LUNA_GRP0+2),
+    OQS_GROUP_ENTRY(P-521, secp521r1, EC, LUNA_GRP0+2), /* Alias of above */
+    OQS_GROUP_ENTRY(brainpoolP256r1, brainpoolP256r1, EC, LUNA_GRP0+3),
+    OQS_GROUP_ENTRY(brainpoolP384r1, brainpoolP384r1, EC, LUNA_GRP0+4),
+    OQS_GROUP_ENTRY(brainpoolP512r1, brainpoolP512r1, EC, LUNA_GRP0+5),
+    OQS_GROUP_ENTRY(x25519, X25519, X25519, LUNA_GRP0+6),
+    OQS_GROUP_ENTRY(x448, X448, X448, LUNA_GRP0+7),
+#endif
+
 };
 
 typedef struct oqs_sigalg_constants_st {
