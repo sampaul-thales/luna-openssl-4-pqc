@@ -1366,6 +1366,7 @@ static void _LUNA_OQS_READKEY(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *keyi
 static void LUNA_OQS_READKEY_NDX_LOCK(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *keyinfo, int ndx_in);
 static void luna_sprintf_base64url(char *obuf, unsigned char *in, unsigned inlen);
 static void _LUNA_debug_ex(const char *prefix, const char *prefix2, const CK_BYTE* p, size_t n);
+static int luna_prov_is_ecdh_len(size_t len);
 
 #include "lunaPqcKem.c"
 
