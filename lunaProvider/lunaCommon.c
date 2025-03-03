@@ -2739,7 +2739,7 @@ int luna_prov_ECDH_compute_key_ex(
     if (px)
         OPENSSL_free(px);
 
-    return (rv == CKR_OK ? 1 : 0);
+    return (rv == CKR_OK ? (int)buflen : 0);
 }
 
 int luna_prov_EC_GROUP_cmp(const EC_GROUP *a, const EC_GROUP *b, BN_CTX *ctx)
