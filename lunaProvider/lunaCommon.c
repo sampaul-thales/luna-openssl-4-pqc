@@ -1436,12 +1436,14 @@ static int _LUNA_OQS_findobject_helper(luna_prov_key_ctx *keyctx, luna_prov_keyi
     return rc;
 }
 
+#define LUNA_KEYCTX_LEN_SECRET(_k) ( ((_k)->sublen == 56) ? 56 : 32 )
+
 int LUNA_OQS_KEM_encaps(luna_prov_key_ctx *keyctx,
     unsigned char *out, size_t *outlen,
     unsigned char *secret, size_t *secretlen)
 {
     LUNA_PRINTF(("alg_name = %s, magic = 0x%X\n", keyctx->alg_name, keyctx->magic));
-    const CK_ULONG length_shared_secret = 32; /* aes-256 */
+    const CK_ULONG length_shared_secret = LUNA_KEYCTX_LEN_SECRET(keyctx);
     void *pd = 0;
     CK_ULONG dlen = 0;
     int bFoundItHere = 0;
@@ -1492,7 +1494,7 @@ int LUNA_OQS_KEM_decaps(luna_prov_key_ctx *keyctx,
     unsigned char *out, size_t *outlen,
     const unsigned char *in, size_t inlen)
 {
-    const CK_ULONG length_shared_secret = 32; /* aes-256 */
+    const CK_ULONG length_shared_secret = LUNA_KEYCTX_LEN_SECRET(keyctx);
     if (out == NULL) {
         // query length only
         *outlen = length_shared_secret;
@@ -3146,9 +3148,9 @@ int luna_prov_ecx_fix_public(ECX_KEY *ecx) {
     } else if (ecx->type == ECX_KEY_TYPE_ED448) {
         keyctx = LUNA_OQS_malloc_from_eddsa(NULL, "ed448");
     } else if (ecx->type == ECX_KEY_TYPE_X25519) {
-        keyctx = LUNA_OQS_malloc_from_eddsa(NULL, "x25519");
+        keyctx = LUNA_OQS_malloc_from_ecx(NULL, "x25519");
     } else if (ecx->type == ECX_KEY_TYPE_X448) {
-        keyctx = LUNA_OQS_malloc_from_eddsa(NULL, "x448");
+        keyctx = LUNA_OQS_malloc_from_ecx(NULL, "x448");
     } else {
         return 0;
     }
