@@ -1366,6 +1366,7 @@ static void _LUNA_OQS_READKEY(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *keyi
 static void LUNA_OQS_READKEY_NDX_LOCK(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *keyinfo, int ndx_in);
 static void luna_sprintf_base64url(char *obuf, unsigned char *in, unsigned inlen);
 static void _LUNA_debug_ex(const char *prefix, const char *prefix2, const CK_BYTE* p, size_t n);
+static int luna_prov_is_ecdh_len(size_t len);
 
 #include "lunaPqcKem.c"
 
@@ -1436,12 +1437,14 @@ static int _LUNA_OQS_findobject_helper(luna_prov_key_ctx *keyctx, luna_prov_keyi
     return rc;
 }
 
+#define LUNA_KEYCTX_LEN_SECRET(_k) ( ((_k)->sublen == 56) ? 56 : 32 )
+
 int LUNA_OQS_KEM_encaps(luna_prov_key_ctx *keyctx,
     unsigned char *out, size_t *outlen,
     unsigned char *secret, size_t *secretlen)
 {
     LUNA_PRINTF(("alg_name = %s, magic = 0x%X\n", keyctx->alg_name, keyctx->magic));
-    const CK_ULONG length_shared_secret = 32; /* aes-256 */
+    const CK_ULONG length_shared_secret = LUNA_KEYCTX_LEN_SECRET(keyctx);
     void *pd = 0;
     CK_ULONG dlen = 0;
     int bFoundItHere = 0;
@@ -1492,7 +1495,7 @@ int LUNA_OQS_KEM_decaps(luna_prov_key_ctx *keyctx,
     unsigned char *out, size_t *outlen,
     const unsigned char *in, size_t inlen)
 {
-    const CK_ULONG length_shared_secret = 32; /* aes-256 */
+    const CK_ULONG length_shared_secret = LUNA_KEYCTX_LEN_SECRET(keyctx);
     if (out == NULL) {
         // query length only
         *outlen = length_shared_secret;
@@ -2410,8 +2413,8 @@ int LUNAPROV_EVP_MD_CTX_set_params(LUNAPROV_EVP_MD_CTX *ctx, const OSSL_PARAM pa
 
 static int luna_prov_is_ecdh_len(size_t len)
 {
-    /* NOTE: p521, p384, p256 */
-    if (len == 66 || len == 48 || len == 32)
+    /* NOTE: p521, p384, p256, bp512, x448 */
+    if (len == 66 || len == 48 || len == 32 || len == 64 || len == 56)
         return 1;
     return 0;
 }
@@ -2736,7 +2739,7 @@ int luna_prov_ECDH_compute_key_ex(
     if (px)
         OPENSSL_free(px);
 
-    return (rv == CKR_OK ? 1 : 0);
+    return (rv == CKR_OK ? (int)buflen : 0);
 }
 
 int luna_prov_EC_GROUP_cmp(const EC_GROUP *a, const EC_GROUP *b, BN_CTX *ctx)
@@ -3146,9 +3149,9 @@ int luna_prov_ecx_fix_public(ECX_KEY *ecx) {
     } else if (ecx->type == ECX_KEY_TYPE_ED448) {
         keyctx = LUNA_OQS_malloc_from_eddsa(NULL, "ed448");
     } else if (ecx->type == ECX_KEY_TYPE_X25519) {
-        keyctx = LUNA_OQS_malloc_from_eddsa(NULL, "x25519");
+        keyctx = LUNA_OQS_malloc_from_ecx(NULL, "x25519");
     } else if (ecx->type == ECX_KEY_TYPE_X448) {
-        keyctx = LUNA_OQS_malloc_from_eddsa(NULL, "x448");
+        keyctx = LUNA_OQS_malloc_from_ecx(NULL, "x448");
     } else {
         return 0;
     }

@@ -31,7 +31,7 @@ static CK_RV LunaPqcKemEncap(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyi
         return rvlookup;
     if ( ! (CK_KEYTYPE_IS_PQC_KEM(keytype) || 0) )
         return CKR_ARGUMENTS_BAD;
-    if (secretLen != 32)
+    if ( ! luna_prov_is_ecdh_len(secretLen) )
         return CKR_ARGUMENTS_BAD;
 
     // If the public key isn't in the HSM, encapsulation can take a byte array for pPublicKey and
@@ -70,7 +70,7 @@ static CK_RV LunaPqcKemEncap(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyi
     }
 
     CK_ULONG valueLen = secretLen;
-    CK_KEY_TYPE aesKeyType = CKK_AES;
+    CK_KEY_TYPE aesKeyType = CKK_GENERIC_SECRET;
     char *encapLabel = "temp-luna-kem-encap";
 
     CK_BBOOL yes = CK_TRUE;
@@ -167,7 +167,7 @@ static CK_RV LunaPqcKemDecap(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyi
     CK_OBJECT_HANDLE decapObjectHandle = 0;
 
     CK_ULONG valueLen = secretLen;
-    CK_KEY_TYPE aesKeyType = CKK_AES;
+    CK_KEY_TYPE aesKeyType = CKK_GENERIC_SECRET;
     char *decapLabel = "temp-luna-kem-decap";
 
     CK_KEY_TYPE keytype = CKK_INVALID;
@@ -178,7 +178,7 @@ static CK_RV LunaPqcKemDecap(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyi
         return rvlookup;
     if ( ! (CK_KEYTYPE_IS_PQC_KEM(keytype) || CK_KEYTYPE_IS_ECX_KEM(keytype)) )
         return CKR_ARGUMENTS_BAD;
-    if (secretLen != 32)
+    if ( ! luna_prov_is_ecdh_len(secretLen) )
         return CKR_ARGUMENTS_BAD;
 
     CK_KEM_DECAP_PARAMS kyberDecapParams; /* same as CK_KYBER_DECAP_PARAMS */
