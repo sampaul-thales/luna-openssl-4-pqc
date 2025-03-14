@@ -2931,7 +2931,7 @@ static int luna_rsa_priv_enc_pkcs(luna_pss_params *pss_params, int flen, const u
    }
 
    num = RSA_size(rsa);
-   if ( (flen > num) || ((flen+2) > num) ) {
+   if ( (flen > num) || ((padding == RSA_X931_PADDING) && ((flen+2) > num)) ) {
       LUNACA3err(LUNACA3_F_RSA_PRIVATE_ENCRYPT, LUNACA3_R_EINVAL);
       LUNA_ERRORLOGL(LUNA_FUNC_NAME ": flen", flen);
       goto err;
