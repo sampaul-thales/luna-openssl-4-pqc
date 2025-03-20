@@ -23,9 +23,16 @@ OPENSSL_LIBS=%OPENSSL_LIBS%
 OPENSSL_SOURCE=%OPENSSL_SOURCE%
 LIBOQS_PREFIX=%LIBOQS_PREFIX%
 
-LUNA_OQS=1
+LUNA_OQS=0
 ifeq ($(LUNA_OQS),1)
 DEFINES+=-DLUNA_OQS -DLUNA_CLOUDFLARE -DOQS_PROVIDER_NOATOMIC
+endif
+
+LUNA_DEBUG=1
+ifeq ($(LUNA_DEBUG),1)
+DEFINES+=-DDEBUG
+else
+DEFINES+=-DNDEBUG
 endif
 
 # object files
@@ -47,7 +54,7 @@ endif
 
 # misc include paths
 INCLUDES_INTERNAL=-I$(OPENSSL_SOURCE)/include
-INCLUDES_INTERNAL_PROV=-I$(OPENSSL_SOURCE)/providers/implementations/include -I$(OPENSSL_SOURCE)/providers/common/include -I$(OPENSSL_SOURCE)/providers
+INCLUDES_INTERNAL_PROV=-I$(OPENSSL_SOURCE)/providers/implementations/include -I$(OPENSSL_SOURCE)/providers/common/include -I$(OPENSSL_SOURCE)/providers/fips/include -I$(OPENSSL_SOURCE)/providers
 INCLUDES_ENGINE=-I../engine
 INCLUDES_OQS=
 ifeq ($(LUNA_OQS),1)

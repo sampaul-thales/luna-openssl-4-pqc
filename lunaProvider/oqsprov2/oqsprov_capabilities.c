@@ -51,7 +51,7 @@ typedef struct oqs_group_constants_st {
 static OQS_GROUP_CONSTANTS oqs_group_list[] = {
     // ad-hoc assignments - take from OQS generate data structures
     ///// OQS_TEMPLATE_FRAGMENT_GROUP_ASSIGNMENTS_START
-    {0x0200, 128, TLS1_3_VERSION, 0, -1, -1, 1},
+    {0x0200, 128, TLS1_3_VERSION, 0, -1, -1, 1}, // [0]
 
     {0x2F00, 128, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x2F80, 128, TLS1_3_VERSION, 0, -1, -1, 1},
@@ -65,7 +65,7 @@ static OQS_GROUP_CONSTANTS oqs_group_list[] = {
     {0x2F82, 192, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x0203, 192, TLS1_3_VERSION, 0, -1, -1, 1},
 
-    {0x2F03, 192, TLS1_3_VERSION, 0, -1, -1, 1},
+    {0x2F03, 192, TLS1_3_VERSION, 0, -1, -1, 1}, // [10]
     {0x2F83, 192, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x0204, 256, TLS1_3_VERSION, 0, -1, -1, 1},
 
@@ -79,7 +79,7 @@ static OQS_GROUP_CONSTANTS oqs_group_list[] = {
     {0x2F39, 128, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x023C, 192, TLS1_3_VERSION, 0, -1, -1, 1},
 
-    {0x2F3C, 192, TLS1_3_VERSION, 0, -1, -1, 1},
+    {0x2F3C, 192, TLS1_3_VERSION, 0, -1, -1, 1}, // [20]
     {0x2F90, 192, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x6399, 192, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x639A, 192, TLS1_3_VERSION, 0, -1, -1, 1},
@@ -92,7 +92,7 @@ static OQS_GROUP_CONSTANTS oqs_group_list[] = {
     {0x2FB2, 128, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x0248, 192, TLS1_3_VERSION, 0, -1, -1, 1},
 
-    {0x2F48, 192, TLS1_3_VERSION, 0, -1, -1, 1},
+    {0x2F48, 192, TLS1_3_VERSION, 0, -1, -1, 1}, // [30]
     {0x2FB3, 192, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x2FB4, 192, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x2FB5, 192, TLS1_3_VERSION, 0, -1, -1, 1},
@@ -104,7 +104,7 @@ static OQS_GROUP_CONSTANTS oqs_group_list[] = {
 
     {0x2F41, 128, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x2FAE, 128, TLS1_3_VERSION, 0, -1, -1, 1},
-    {0x0242, 192, TLS1_3_VERSION, 0, -1, -1, 1},
+    {0x0242, 192, TLS1_3_VERSION, 0, -1, -1, 1}, // [40]
 
     {0x2F42, 192, TLS1_3_VERSION, 0, -1, -1, 1},
     {0x2FAF, 192, TLS1_3_VERSION, 0, -1, -1, 1},
@@ -118,7 +118,7 @@ static OQS_GROUP_CONSTANTS oqs_group_list[] = {
     {0x0245, 192, TLS1_3_VERSION, 0, -1, -1, 1},
 
     {0x2F45, 192, TLS1_3_VERSION, 0, -1, -1, 1},
-    {0x2FB1, 192, TLS1_3_VERSION, 0, -1, -1, 1},
+    {0x2FB1, 192, TLS1_3_VERSION, 0, -1, -1, 1}, // [50]
     {0x0246, 256, TLS1_3_VERSION, 0, -1, -1, 1},
 
     {0x2F46, 256, TLS1_3_VERSION, 0, -1, -1, 1},
@@ -622,6 +622,7 @@ int oqs_patch_codepoints()
         oqs_sigalg_list[47].code_point
             = atoi(getenv("OQS_CODEPOINT_RSA3072_SPHINCSSHAKE128FSIMPLE"));
     ///// OQS_TEMPLATE_FRAGMENT_CODEPOINT_PATCHING_END
+
     return 1;
 }
 
@@ -802,7 +803,7 @@ static int oqs_sigalg_capability(OSSL_CALLBACK *cb, void *arg)
 }
 #endif /* OSSL_CAPABILITY_TLS_SIGALG_NAME */
 
-int oqs_provider_get_capabilities(void *provctx, const char *capability,
+int luna_oqs_provider_get_capabilities(void *provctx, const char *capability,
                                   OSSL_CALLBACK *cb, void *arg)
 {
     if (strcasecmp(capability, "TLS-GROUP") == 0)

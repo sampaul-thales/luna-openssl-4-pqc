@@ -26,7 +26,13 @@
 #define LUNA_PROV_BUILDINFO_SZ LUNA_PROV_VERSION_SZ
 #define LUNA_PROV_SZ "lunaprov"
 #define LUNA_PROV_CONCAT_SZ(a_, b_) a_ b_
+
+/* fips property */
+#ifdef LUNA_FIPS
+#define LUNA_PROV_EQUALS_SZ "provider=lunaprov,fips=yes"
+#else
 #define LUNA_PROV_EQUALS_SZ "provider=lunaprov"
+#endif
 
 /*
  * Luna provider context
@@ -772,6 +778,7 @@ static const OSSL_PARAM luna_param_types[] = {
 };
 
 #ifdef LUNA_OQS
+
 // get the last number on the composite OID
 int get_composite_idx(int idx)
 {
@@ -797,6 +804,8 @@ int get_composite_idx(int idx)
     }
     return ret;
 }
+#endif
+
 #endif
 
 static const OSSL_PARAM *luna_gettable_params(void *provctx)
@@ -896,11 +905,11 @@ static const OSSL_ALGORITHM luna_kdfs[] = {
 static const OSSL_ALGORITHM luna_keyexch[] = {
 #ifndef OPENSSL_NO_EC
     { PROV_NAMES_ECDH, LUNA_PROV_EQUALS_SZ, luna_ecdh_keyexch_functions },
-#ifdef LUNA_OQS
+# ifdef LUNA_OQS
     { PROV_NAMES_X25519, LUNA_PROV_EQUALS_SZ, luna_x25519_keyexch_functions },
     { PROV_NAMES_X448, LUNA_PROV_EQUALS_SZ, luna_x448_keyexch_functions },
-#endif
-#endif
+# endif /* LUNA_OQS */
+#endif /* OPENSSL_NO_EC */
     // NOTE: { PROV_NAMES_HKDF, LUNA_PROV_EQUALS_SZ, luna_ossl_kdf_hkdf_keyexch_functions },
     { NULL, NULL, NULL }
 };
@@ -924,15 +933,15 @@ static const OSSL_ALGORITHM luna_signature[] = {
 #endif
     { PROV_NAMES_RSA, LUNA_PROV_EQUALS_SZ, luna_rsa_signature_functions },
 #ifndef OPENSSL_NO_EC
-#ifdef LUNA_OQS
+# ifdef LUNA_OQS
     { PROV_NAMES_ED25519, LUNA_PROV_EQUALS_SZ, luna_ed25519_signature_functions },
     { PROV_NAMES_ED448, LUNA_PROV_EQUALS_SZ, luna_ed448_signature_functions },
-#endif /* LUNA_OQS */
+# endif /* LUNA_OQS */
     { PROV_NAMES_ECDSA, LUNA_PROV_EQUALS_SZ, luna_ec_signature_functions },
 # ifndef OPENSSL_NO_SM2
     //{ PROV_NAMES_SM2, LUNA_PROV_EQUALS_SZ, luna_sm2_signature_functions },
-# endif
-#endif
+# endif /* OPENSSL_NO_SM2 */
+#endif /* OPENSSL_NO_EC */
 #ifdef LUNA_OQS
 #ifdef OQS_ENABLE_SIG_dilithium_2
     SIGALG("dilithium2", 128, oqs_signature_functions),
@@ -1078,12 +1087,14 @@ static const OSSL_ALGORITHM luna_keymgmt[] = {
       PROV_DESCS_EC },
 # ifdef LUNA_OQS
 # ifndef OPENSSL_NO_ECX
+#  ifdef LUNA_OQS
     { PROV_NAMES_X25519, LUNA_PROV_EQUALS_SZ, luna_x25519_keymgmt_functions, PROV_DESCS_X25519 },
     { PROV_NAMES_X448, LUNA_PROV_EQUALS_SZ, luna_x448_keymgmt_functions, PROV_DESCS_X448 },
     { PROV_NAMES_ED25519, LUNA_PROV_EQUALS_SZ, luna_ed25519_keymgmt_functions,
       PROV_DESCS_ED25519 },
     { PROV_NAMES_ED448, LUNA_PROV_EQUALS_SZ, luna_ed448_keymgmt_functions,
       PROV_DESCS_ED448 },
+#  endif /* LUNA_OQS */
 # endif /* OPENSSL_NO_ECX */
 #endif /* LUNA_OQS */
 #endif /* OPENSSL_NO_EC */
@@ -1214,7 +1225,7 @@ static const OSSL_ALGORITHM luna_keymgmt[] = {
 
 static const OSSL_ALGORITHM luna_encoder[] = {
 #define ENCODER_PROVIDER LUNA_PROV_SZ
-#include "encoders.inc"
+#include "luna_encoders.inc"
 #ifdef LUNA_OQS
 #undef ENCODER
 #undef ENCODER_TEXT
@@ -1227,7 +1238,7 @@ static const OSSL_ALGORITHM luna_encoder[] = {
 
 static const OSSL_ALGORITHM luna_decoder[] = {
 #define DECODER_PROVIDER LUNA_PROV_SZ
-#include "decoders.inc"
+#include "luna_decoders.inc"
 #ifdef LUNA_OQS
 #undef DECODER
 #undef DECODER_TEXT
@@ -1239,7 +1250,7 @@ static const OSSL_ALGORITHM luna_decoder[] = {
 };
 
 static const OSSL_ALGORITHM luna_store[] = {
-    /* FIXME:causes segfault: */ { "file", LUNA_PROV_EQUALS_SZ, luna_file_store_functions },
+    { "file", LUNA_PROV_EQUALS_SZ, luna_file_store_functions },
     { NULL, NULL, NULL }
 };
 
@@ -1326,20 +1337,30 @@ static void luna_teardown(void *provctx)
     luna_prov_ctx_free(ctx);
 }
 
+#ifdef LUNA_OQS
+
 static
 int luna_prov_get_capabilities(void *provctx, const char *capability,
                                OSSL_CALLBACK *cb, void *arg)
 {
-#ifdef LUNA_OQS
-    extern OSSL_FUNC_provider_get_capabilities_fn oqs_provider_get_capabilities;
-    // NOTE: review the child oqsctx get used properly
     luna_prov_ctx *lunactx = (luna_prov_ctx *)provctx;
-    return oqs_provider_get_capabilities(lunactx->oqsctx, capability, cb, arg);
-#else
-    /* luna (prior to OQS) had no TLS support, so return 0 */
-    return 0;
-#endif
+    extern OSSL_FUNC_provider_get_capabilities_fn luna_oqs_provider_get_capabilities;
+    return luna_oqs_provider_get_capabilities(lunactx->oqsctx, capability, cb, arg);
 }
+
+#else /* LUNA_OQS */
+
+#include "lunaprov_capabilities.c"
+
+static
+int luna_prov_get_capabilities(void *provctx, const char *capability,
+                               OSSL_CALLBACK *cb, void *arg)
+{
+    luna_prov_ctx *lunactx = (luna_prov_ctx *)provctx;
+    return luna_classic_provider_get_capabilities(lunactx, capability, cb, arg);
+}
+
+#endif /* LUNA_OQS */
 
 /* Functions we provide to the core */
 static const OSSL_DISPATCH luna_dispatch_table[] = {
@@ -1365,7 +1386,7 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
 
     OSSL_FUNC_core_get_libctx_fn *c_get_libctx = NULL;
 
-#ifdef LUNA_OQS
+#ifdef LUNA_OSSL_3_2
     OSSL_FUNC_core_obj_create_fn *c_obj_create = NULL;
     OSSL_FUNC_core_obj_add_sigid_fn *c_obj_add_sigid = NULL;
     int i = 0;
@@ -1377,7 +1398,16 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
                                      &opensslv, sizeof(void*), 0},
                                     {NULL, 0, NULL, 0, 0}};
 
+    luna_getenv_LUNAPROV_init();
     LUNA_PRINTF(("loading...\n"));
+
+    // pre, warn if default or fips provider are present
+    if (!OSSL_PROVIDER_available(libctx, "default")
+        && !OSSL_PROVIDER_available(libctx, "fips")) {
+        OQS_PROV_PRINTF("OQS PROV: pre: Default and FIPS provider not available.\n");
+    } else {
+        OQS_PROV_PRINTF("OQS PROV: pre: Default or FIPS provider available.\n");
+    }
 
 #ifdef LUNA_OQS
     // init liboqs
@@ -1421,7 +1451,7 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
         case OSSL_FUNC_CORE_GET_LIBCTX:
             c_get_libctx = OSSL_FUNC_core_get_libctx(in);
             break;
-#ifdef LUNA_OQS
+#ifdef LUNA_OSSL_3_2
         case OSSL_FUNC_CORE_OBJ_CREATE:
             c_obj_create = OSSL_FUNC_core_obj_create(in);
             break;
@@ -1438,7 +1468,7 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
     if (c_get_libctx == NULL)
         goto end_init;
 
-#ifdef LUNA_OQS
+#ifdef LUNA_OSSL_3_2
     if (c_obj_create == NULL || c_obj_add_sigid==NULL || c_get_params == NULL)
         goto end_init;
 
@@ -1447,7 +1477,9 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
     if (c_get_params(handle, version_request)) {
         ossl_versionp = *(void **)version_request[0].data;
     }
+#endif /* LUNA_OSSL_3_2 */
 
+#ifdef LUNA_OQS
     // insert all OIDs to the global objects list
     for (i = 0; i < OQS_OID_CNT; i += 2) {
         if (!c_obj_create(handle, oqs_oid_alg_list[i], oqs_oid_alg_list[i + 1],
@@ -1494,7 +1526,7 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
             goto end_init;
         }
     }
-#endif
+#endif /* LUNA_OQS */
 
     /*
      * We want to make sure that all calls from this provider that requires
@@ -1522,9 +1554,9 @@ int luna_provider_init(const OSSL_CORE_HANDLE *handle,
     if (!OSSL_PROVIDER_available(libctx, "default")
         && !OSSL_PROVIDER_available(libctx, "fips")) {
         OQS_PROV_PRINTF(
-            "OQS PROV: Default and FIPS provider not available. Errors may result.\n");
+            "OQS PROV: post: Default and FIPS provider not available. Errors may result.\n");
     } else {
-        OQS_PROV_PRINTF("OQS PROV: Default or FIPS provider available.\n");
+        OQS_PROV_PRINTF("OQS PROV: post: Default or FIPS provider available.\n");
     }
     rc = 1;
 

@@ -34,7 +34,11 @@ default0: all
 
 ED_KEY=key0
 
-all: $(ED_KEY) req0
+all: $(ED_KEY) check0 req0
+	@echo
+
+# FIXME: broken due to provider load order
+all_dgst: check0 sign1 sign2
 	@echo
 
 # generate key
@@ -51,7 +55,6 @@ key0: tmped.pkey.0
 
 tmped.pkey.0: tmped.foo
 	openssl genpkey $(HW_ENGINE) $(GENPKEY0_ALGORITHM) -out tmped.pkey
-	openssl pkey -check -in tmped.pkey $(HW_ENGINE)
 	cp tmped.pkey tmped.pkey.0
 	@echo '--------'
 

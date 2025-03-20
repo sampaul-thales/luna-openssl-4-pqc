@@ -735,6 +735,18 @@ typedef struct CK_ECDH1_DERIVE_PARAMS {
   CK_BYTE_PTR pPublicData;
 } CK_ECDH1_DERIVE_PARAMS;
 
+typedef CK_RV CK_ENTRY(CK_PTR CK_CA_DeriveKeyAndWrap)(
+   CK_SESSION_HANDLE hSession,          /* session */
+   CK_MECHANISM_PTR  pMechanism,        /* derive mechanism */
+   CK_OBJECT_HANDLE  hBaseKey,          /* base key */
+   CK_ATTRIBUTE_PTR  pTemplate,         /* extra derive parameters (public key?) */
+   CK_ULONG          ulAttributeCount,  /* template length */
+   CK_MECHANISM_PTR  pMechanismWrap,    /* wrap mechanism (can be no-encryption for now) */
+   CK_OBJECT_HANDLE  hWrappingKey,      /* wrap key (can be NULL for now) */
+   CK_BYTE_PTR       pWrappedKey,       /* gets wrapped key */
+   CK_ULONG_PTR      pulWrappedKeyLen   /* gets wrapped key size */
+);
+
 /*****************************************************************************/
 
 /* P11 data structures are packed on Windows platform only. */

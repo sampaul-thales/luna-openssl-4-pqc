@@ -35,7 +35,11 @@ default0: all
 #FIXME:DSA_KEY=key0
 DSA_KEY=key1
 
-all: $(DSA_KEY) req0 sign1 sign2 param0
+all: $(DSA_KEY) check0 req0 sign1 param0
+	@echo
+
+# FIXME: broken due to provider load order
+all_dgst: check0 sign2
 	@echo
 
 # generate key
@@ -50,8 +54,11 @@ key0: tmpdsa.pkey.0
 
 tmpdsa.pkey.0: tmpdsa.foo
 	openssl genpkey $(HW_ENGINE) -out tmpdsa.pkey -paramfile tmpdsaparam.pem
-	openssl pkey -check -in tmpdsa.pkey $(HW_ENGINE)
 	cp tmpdsa.pkey tmpdsa.pkey.0
+	@echo '--------'
+
+check0:
+	openssl pkey -check -in tmpdsa.pkey $(HW_ENGINE)
 	@echo '--------'
 
 # second choice: generate key via sautil

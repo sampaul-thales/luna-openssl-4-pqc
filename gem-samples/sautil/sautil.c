@@ -134,7 +134,7 @@ extern "C" {
 /*****************************************************************************/
 
 #define LOCAL_APP_NAME "sautil"
-#define LOCAL_APP_VERSION_BASE "v3.0.0-2"
+#define LOCAL_APP_VERSION_BASE "v3.1.0-1"
 #if defined(LUNA_OSSL_PQC)
 #define LOCAL_APP_VERSION LOCAL_APP_VERSION_BASE "pqc"
 #else
@@ -5000,7 +5000,8 @@ static CK_OBJECT_HANDLE luna_find_pqc_handle(luna_context_t *ctx, EVP_PKEY *dsa,
    rcBase = 0;
 
    /* decode private/public key blob */
-   CK_BYTE blob[4096] = {0xFF,0xFF,0xFF,0xFF,0x00};
+   /* FIXME: the code below fails to iterate over multiple keys as in hybrid/composite */
+   CK_BYTE blob[1024 * 8] = {0xFF,0xFF,0xFF,0xFF,0x00};
    size_t bloblen = sizeof(blob);
    if ( (EVP_PKEY_get_raw_private_key(dsa, blob, &bloblen) <= 0) || (bloblen < 32) ) {
        fprintf(stderr, "ERROR: EVP_PKEY_get_raw_private_key failed.\n");
@@ -5040,6 +5041,7 @@ static CK_OBJECT_HANDLE luna_find_pqc_handle(luna_context_t *ctx, EVP_PKEY *dsa,
        }
 
    } else {
+
        /* possibly version 1 */
        CK_BYTE headerV1[4] = {0,0,0,0};
        if (memcmp(headerV1, blob, sizeof(headerV1)) != 0) {

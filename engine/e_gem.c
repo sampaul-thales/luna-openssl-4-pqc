@@ -91,6 +91,12 @@
 #define LUNA_OSSL_ASN1_SET_SECURITY_BITS (1)
 #endif
 
+/* NOTE: check key pairwise consistency */
+#if (1) && (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+#define LUNA_OSSL_METH_SET_CHECK_KEYPAIR (1)
+#define LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR (1)
+#endif
+
 #if defined(LUNA_OSSL_ECDSA)
 /* internal: #include <openssl/ec_lcl.h> */
 /* internal: #include <openssl/ecs_locl.h> */
@@ -408,6 +414,15 @@ static char *luna_filenamedup(char *spath, char *sfile);
 static CK_RV STUB_CA_SetApplicationID(CK_ULONG major, CK_ULONG minor);
 static CK_RV STUB_CT_HsmIdFromSlotId(CK_SLOT_ID slotID, unsigned int *pHsmID);
 static CK_RV STUB_CA_GetHAState(CK_SLOT_ID slotId, CK_HA_STATE_PTR pState);
+static CK_RV STUB_CA_DeriveKeyAndWrap(CK_SESSION_HANDLE hSession,          /* session */
+        CK_MECHANISM_PTR  pMechanism,        /* derive mechanism */
+        CK_OBJECT_HANDLE  hBaseKey,          /* base key */
+        CK_ATTRIBUTE_PTR  pTemplate,         /* extra derive parameters (public key?) */
+        CK_ULONG          ulAttributeCount,  /* template length */
+        CK_MECHANISM_PTR  pMechanismWrap,    /* wrap mechanism (can be no-encryption for now) */
+        CK_OBJECT_HANDLE  hWrappingKey,      /* wrap key (can be NULL for now) */
+        CK_BYTE_PTR       pWrappedKey,       /* gets wrapped key */
+        CK_ULONG_PTR      pulWrappedKeyLens);
 static int luna_ps_check_lib(void);
 static int luna_pa_check_lib(void);
 
@@ -446,6 +461,7 @@ static int luna_get_enable_dsa_gen_key_pair(void);
 static int luna_get_enable_pqc_gen_key_pair(void);
 static int luna_get_enable_ec_gen_key_pair(void);
 static int luna_get_enable_ed_gen_key_pair(void);
+static int luna_get_enable_em_gen_key_pair(void);
 static int luna_get_recovery_level(void);
 
 static int luna_gets_passphrase(const char *szslotid, char *secretString, unsigned maxlen);
@@ -538,6 +554,18 @@ static int luna_get_flag_exit(void);
 #ifdef LUNA_OSSL_ASN1_SET_SECURITY_BITS
 static int luna_rsa_security_bits(const EVP_PKEY *pkey);
 static int luna_dsa_security_bits(const EVP_PKEY *pkey);
+static int luna_ec_security_bits(const EVP_PKEY *pkey);
+#endif
+
+#if defined(LUNA_OSSL_METH_SET_CHECK_KEYPAIR) || defined(LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR)
+static int luna_rsa_check_keypair0(EVP_PKEY *pkey);
+static int luna_dsa_check_keypair0(EVP_PKEY *pkey);
+static int luna_ec_check_keypair0(EVP_PKEY *pkey);
+#endif
+#ifdef LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR
+static int luna_rsa_check_keypair1(const EVP_PKEY *pkey);
+static int luna_dsa_check_keypair1(const EVP_PKEY *pkey);
+static int luna_ec_check_keypair1(const EVP_PKEY *pkey);
 #endif
 
 #ifdef LUNA_CONFIG_OSSL_PROVIDER
@@ -637,7 +665,8 @@ static struct {
    char *EnableEcGenKeyPair; /* EC keypair generation for PQC-hybrid and Classic */
    char *RecoveryLevel; /* 0 = no recovery, 1 = c_login, 2 = c_finalize */
 
-   char *EnableEdGenKeyPair; /* ED keypair generation for PQC-hybrid and Classic */
+   char *EnableEdGenKeyPair; /* EC-EDWARDS keypair generation for PQC-hybrid and Classic */
+   char *EnableEmGenKeyPair; /* EC-MONTGOMERY keypair generation for PQC-hybrid and Classic */
 
 } g_config = {NULL, NULL, NULL, NULL,
               NULL, NULL, NULL, NULL,
@@ -648,7 +677,7 @@ static struct {
               NULL, NULL, NULL, NULL,
               NULL, NULL, NULL, NULL,
               NULL, NULL, NULL, NULL,
-              NULL};
+              NULL, NULL};
 
 static struct {
    volatile int LogLevel;
@@ -680,8 +709,9 @@ static struct {
       CK_CA_SetApplicationID CA_SetApplicationID;
       CK_CT_HsmIdFromSlotId CT_HsmIdFromSlotId;
       CK_CA_GetHAState CA_GetHAState;
+      CK_CA_DeriveKeyAndWrap CA_DeriveKeyAndWrap;
    } ext;
-} p11 = {0, 0, {0, 0, 0}};
+} p11 = {0, 0, {0, 0, 0, 0}};
 
 /* Saved function pointers */
 static int (*saved_rsa_pub_dec)(int flen, const unsigned char *from, unsigned char *to, RSA *rsa, int padding) = NULL;
@@ -820,8 +850,19 @@ static int luna_ecdsa_compute_key(unsigned char **psec, size_t *pseclen,
 /* possible flags: ECDSA_FLAG_FIPS_METHOD, EC_FLAG_NON_FIPS_ALLOW, (EC_FLAG_EXT_PKEY), (EC_FLAG_FIPS_CHECKED) */
 static LUNA_EC_KEY_METHOD *p_luna_ecdsa_method = NULL;
 
+#ifdef LUNA_EC_USE_EVP_PKEY_METHS
+static EVP_PKEY_METHOD *p_luna_evp_pkey_ec = NULL;
+#ifdef LUNA_EC_USE_EVP_ASN1_METHS
+static EVP_PKEY_ASN1_METHOD *p_luna_asn1_ec = NULL;
+#endif /* LUNA_EC_USE_EVP_ASN1_METHS */
+#endif /* LUNA_EC_USE_EVP_PKEY_METHS */
+
+#define NID_ec NID_X9_62_id_ecPublicKey
+#define luna_get_disable_ec luna_get_disable_ecdsa
+
 static int luna_ecdsa_check_private(EC_KEY *eckey);
 static int luna_ecdsa_check_public(EC_KEY *eckey);
+
 #endif /* LUNA_OSSL_ECDSA */
 
 /* Random number generation entry point */
@@ -919,6 +960,9 @@ static int luna_bind_engine(ENGINE *e) {
          const EVP_PKEY_METHOD *pkey_method = EVP_PKEY_meth_find(EVP_PKEY_RSA);
          if (pkey_method != NULL) {
             EVP_PKEY_meth_copy(p_luna_evp_pkey_rsaenc, pkey_method);
+#ifdef LUNA_OSSL_METH_SET_CHECK_KEYPAIR
+            EVP_PKEY_meth_set_check(p_luna_evp_pkey_rsaenc, luna_rsa_check_keypair0);
+#endif
             /* EVP_PKEY_meth_set_sign for PSS support */
             EVP_PKEY_meth_get_sign(p_luna_evp_pkey_rsaenc, &saved_rsaenc.sign_init, &saved_rsaenc.sign);
             EVP_PKEY_meth_set_sign(p_luna_evp_pkey_rsaenc, saved_rsaenc.sign_init, luna_rsa_sign);
@@ -935,11 +979,14 @@ static int luna_bind_engine(ENGINE *e) {
       }
 
       /* create method for EVP_PKEY_RSA_PSS */
-      p_luna_evp_pkey_rsapss = EVP_PKEY_meth_new(EVP_PKEY_RSA_PSS, EVP_PKEY_FLAG_AUTOARGLEN);
+      p_luna_evp_pkey_rsapss = EVP_PKEY_meth_new(EVP_PKEY_RSA_PSS, 0); /* removed EVP_PKEY_FLAG_AUTOARGLEN */
       if (p_luna_evp_pkey_rsapss != NULL) {
          const EVP_PKEY_METHOD *pkey_method = EVP_PKEY_meth_find(EVP_PKEY_RSA_PSS);
          if (pkey_method != NULL) {
             EVP_PKEY_meth_copy(p_luna_evp_pkey_rsapss, pkey_method);
+#ifdef LUNA_OSSL_METH_SET_CHECK_KEYPAIR
+            EVP_PKEY_meth_set_check(p_luna_evp_pkey_rsapss, luna_rsa_check_keypair0);
+#endif
             /* EVP_PKEY_meth_set_sign for PSS support */
             EVP_PKEY_meth_get_sign(p_luna_evp_pkey_rsapss, &saved_rsapss.sign_init, &saved_rsapss.sign);
             EVP_PKEY_meth_set_sign(p_luna_evp_pkey_rsapss, saved_rsapss.sign_init, luna_rsa_sign);
@@ -960,6 +1007,9 @@ static int luna_bind_engine(ENGINE *e) {
 #ifdef LUNA_OSSL_ASN1_SET_SECURITY_BITS
             EVP_PKEY_asn1_set_security_bits(p_luna_asn1_rsaenc, luna_rsa_security_bits);
 #endif
+#ifdef LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR
+            EVP_PKEY_asn1_set_check(p_luna_asn1_rsaenc, luna_rsa_check_keypair1);
+#endif
          } else {
             EVP_PKEY_asn1_free(p_luna_asn1_rsaenc);
             p_luna_asn1_rsaenc = NULL;
@@ -974,6 +1024,9 @@ static int luna_bind_engine(ENGINE *e) {
             EVP_PKEY_asn1_copy(p_luna_asn1_rsapss, asn1_method);
 #ifdef LUNA_OSSL_ASN1_SET_SECURITY_BITS
             EVP_PKEY_asn1_set_security_bits(p_luna_asn1_rsapss, luna_rsa_security_bits);
+#endif
+#ifdef LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR
+            EVP_PKEY_asn1_set_check(p_luna_asn1_rsapss, luna_rsa_check_keypair1);
 #endif
          } else {
             EVP_PKEY_asn1_free(p_luna_asn1_rsapss);
@@ -1023,6 +1076,9 @@ static int luna_bind_engine(ENGINE *e) {
          const EVP_PKEY_METHOD *pkey_method = EVP_PKEY_meth_find(EVP_PKEY_DSA);
          if (pkey_method != NULL) {
             EVP_PKEY_meth_copy(p_luna_evp_pkey_dsa, pkey_method);
+#ifdef LUNA_OSSL_METH_SET_CHECK_KEYPAIR
+            EVP_PKEY_meth_set_check(p_luna_evp_pkey_dsa, luna_dsa_check_keypair0);
+#endif
             /* EVP_PKEY_meth_set_ctrl for dsa keygen support */
             EVP_PKEY_meth_get_ctrl(p_luna_evp_pkey_dsa, &saved_dsa.ctrl, &saved_dsa.ctrl_str);
             EVP_PKEY_meth_set_ctrl(p_luna_evp_pkey_dsa, luna_dsa_ctrl, saved_dsa.ctrl_str);
@@ -1045,6 +1101,9 @@ static int luna_bind_engine(ENGINE *e) {
 #endif
 #ifdef LUNA_OSSL_ASN1_SET_SECURITY_BITS
             EVP_PKEY_asn1_set_security_bits(p_luna_asn1_dsa, luna_dsa_security_bits);
+#endif
+#ifdef LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR
+            EVP_PKEY_asn1_set_check(p_luna_asn1_dsa, luna_dsa_check_keypair1);
 #endif
          } else {
             EVP_PKEY_asn1_free(p_luna_asn1_dsa);
@@ -1087,10 +1146,40 @@ static int luna_bind_engine(ENGINE *e) {
    if (luna_have_ecdsa_init == 0) {
 
 #ifdef LUNA_EC_USE_EVP_PKEY_METHS
-/* NOTE: EC is immune to the types of issues affecting RSA, DSA */
-#error "create method for EVP_PKEY_EC is TBD"
+      /* create method for EVP_PKEY_EC */
+      p_luna_evp_pkey_ec = EVP_PKEY_meth_new(EVP_PKEY_EC, EVP_PKEY_FLAG_AUTOARGLEN);
+      if (p_luna_evp_pkey_ec != NULL) {
+         const EVP_PKEY_METHOD *pkey_method = EVP_PKEY_meth_find(EVP_PKEY_EC);
+         if (pkey_method != NULL) {
+            EVP_PKEY_meth_copy(p_luna_evp_pkey_ec, pkey_method);
+#ifdef LUNA_OSSL_METH_SET_CHECK_KEYPAIR
+            EVP_PKEY_meth_set_check(p_luna_evp_pkey_ec, luna_ec_check_keypair0);
+#endif
+            /* nothing to override yet */
+         } else {
+            EVP_PKEY_meth_free(p_luna_evp_pkey_ec);
+            p_luna_evp_pkey_ec = NULL;
+         }
+      }
+
 #ifdef LUNA_EC_USE_EVP_ASN1_METHS
-#error "create ASN1 method for EVP_PKEY_EC is TBD"
+      /* create ASN1 method, EVP_PKEY_EC */
+      p_luna_asn1_ec = EVP_PKEY_asn1_new(EVP_PKEY_EC, ASN1_PKEY_SIGPARAM_NULL, "EC", "Luna EC-method (ASN1)");
+      if (p_luna_asn1_ec != NULL) {
+         const EVP_PKEY_ASN1_METHOD *asn1_method = EVP_PKEY_asn1_find(NULL, EVP_PKEY_EC);
+         if (asn1_method != NULL) {
+            EVP_PKEY_asn1_copy(p_luna_asn1_ec, asn1_method);
+#ifdef LUNA_OSSL_ASN1_SET_SECURITY_BITS
+            EVP_PKEY_asn1_set_security_bits(p_luna_asn1_ec, luna_ec_security_bits);
+#endif
+#ifdef LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR
+            EVP_PKEY_asn1_set_check(p_luna_asn1_ec, luna_ec_check_keypair1);
+#endif
+         } else {
+            EVP_PKEY_asn1_free(p_luna_asn1_ec);
+            p_luna_asn1_ec = NULL;
+         }
+      }
 #endif /* LUNA_EC_USE_EVP_ASN1_METHS */
 #endif /* LUNA_EC_USE_EVP_PKEY_METHS */
 
@@ -1255,6 +1344,8 @@ static int luna_destroy_engine(ENGINE *e) {
 /* Init the engine */
 /* NOTE: this function shall always return 1 despite errors */
 static int luna_init_engine(ENGINE *engine) {
+   int want_session = 0;
+   int want_login = 0;
    char itoabuf[LUNA_ATOI_BYTES];
 
    memset(itoabuf, 0, sizeof(itoabuf));
@@ -1270,12 +1361,14 @@ static int luna_init_engine(ENGINE *engine) {
    } /* init pid_intermediate */
 
    /* Prompt for password(s) */
-   if (luna_get_enable_login_init()) {
+   want_session = (luna_get_engine_init() != NULL);
+   want_login = luna_get_enable_login_init();
+   if ( want_session && want_login ) {
       unsigned ii = 0;
       for (ii = 0; ii < LUNA_MAX_SLOT; ii++) {
          if ((ii > 0) && (luna_get_engine2_init() == NULL))
             break;
-         if (luna_get_enable_login_init()) {
+         if ( want_login ) {
             int rc = 0;
             char *password = NULL;
 
@@ -1298,7 +1391,7 @@ static int luna_init_engine(ENGINE *engine) {
    }
 
    /* Test that we can open a context on each slot when we need to */
-   if (luna_get_enable_login_init()) {
+   if ( want_session ) {
       unsigned ii = 0;
       for (ii = 0; ii < LUNA_MAX_SLOT; ii++) {
          luna_context_t ctx = LUNA_CONTEXT_T_INIT;
@@ -1377,6 +1470,7 @@ static int luna_load_p11(void) {
       if (p11.ext.CA_SetApplicationID == NULL) {
          p11.ext.CT_HsmIdFromSlotId = (CK_CT_HsmIdFromSlotId)luna_dso_bind_func(luna_dso, "CT_HsmIdFromSlotId");
       }
+      p11.ext.CA_DeriveKeyAndWrap = (CK_CA_DeriveKeyAndWrap)luna_dso_bind_func(luna_dso, "CA_DeriveKeyAndWrap");
    } else if (!luna_pa_check_lib()) {
       p11.C_GetFunctionList = (CK_C_GetFunctionList)luna_dso_bind_func(luna_dso, "P11Wrap_GetFunctionList");
       p11.ext.CA_SetApplicationID = (CK_CA_SetApplicationID)luna_dso_bind_func(luna_dso, "P11Wrap_SetApplicationID");
@@ -1385,6 +1479,7 @@ static int luna_load_p11(void) {
       if (p11.ext.CA_SetApplicationID == NULL) {
          p11.ext.CT_HsmIdFromSlotId = (CK_CT_HsmIdFromSlotId)luna_dso_bind_func(luna_dso, "P11Wrap_CT_HsmIdFromSlotId");
       }
+      p11.ext.CA_DeriveKeyAndWrap = (CK_CA_DeriveKeyAndWrap)luna_dso_bind_func(luna_dso, "P11Wrap_DeriveKeyAndWrap");
    }
 
    if (p11.C_GetFunctionList == NULL) {
@@ -1416,6 +1511,10 @@ static int luna_load_p11(void) {
 
    if (p11.ext.CA_GetHAState == NULL) {
       p11.ext.CA_GetHAState = STUB_CA_GetHAState;
+   }
+
+   if (p11.ext.CA_DeriveKeyAndWrap == NULL) {
+      p11.ext.CA_DeriveKeyAndWrap = STUB_CA_DeriveKeyAndWrap;
    }
 
    retCode = p11.C_GetFunctionList(&p11.std);
@@ -4736,9 +4835,13 @@ static int luna_init_properties2(void) {
    if ((p = luna_getprop(cf, LUNA_CONF_SECTION, "EnableEcGenKeyPair"))) {
       g_config.EnableEcGenKeyPair = p;
    }
-   /* "EnableEdGenKeyPair" is optional to generate ed in engine */
+   /* "EnableEdGenKeyPair" is optional to generate EC-EDWARDS in provider */
    if ((p = luna_getprop(cf, LUNA_CONF_SECTION, "EnableEdGenKeyPair"))) {
       g_config.EnableEdGenKeyPair = p;
+   }
+   /* "EnableEmGenKeyPair" is optional to generate EC-MONTGOMERY in provider */
+   if ((p = luna_getprop(cf, LUNA_CONF_SECTION, "EnableEmGenKeyPair"))) {
+      g_config.EnableEmGenKeyPair = p;
    }
    /* "EnableRsaSignVerify" is optional to prompt for password */
    if ((p = luna_getprop(cf, LUNA_CONF_SECTION, "EnableRsaSignVerify"))) {
@@ -4860,6 +4963,8 @@ static int luna_init_properties2(void) {
       IF_LUNA_DEBUG(luna_dump_s("EnableEcGenKeyPair", g_config.EnableEcGenKeyPair));
    if (g_config.EnableEdGenKeyPair)
       IF_LUNA_DEBUG(luna_dump_s("EnableEdGenKeyPair", g_config.EnableEdGenKeyPair));
+   if (g_config.EnableEmGenKeyPair)
+      IF_LUNA_DEBUG(luna_dump_s("EnableEmGenKeyPair", g_config.EnableEmGenKeyPair));
    if (g_config.EnableRsaSignVerify)
       IF_LUNA_DEBUG(luna_dump_s("EnableRsaSignVerify", g_config.EnableRsaSignVerify));
    if (g_config.EnablePkeyMeths)
@@ -4980,6 +5085,10 @@ static void luna_fini_properties2(void) {
    if (g_config.EnableEdGenKeyPair != NULL) {
       LUNA_free(g_config.EnableEdGenKeyPair);
       g_config.EnableEdGenKeyPair = NULL;
+   }
+   if (g_config.EnableEmGenKeyPair != NULL) {
+      LUNA_free(g_config.EnableEmGenKeyPair);
+      g_config.EnableEmGenKeyPair = NULL;
    }
    if (g_config.EnableRsaSignVerify != NULL) {
       LUNA_free(g_config.EnableRsaSignVerify);
@@ -5328,7 +5437,11 @@ static int luna_attribute_malloc2(CK_ATTRIBUTE_PTR pAttr, CK_ULONG type, CK_VOID
 static int luna_find_object_ex1(luna_context_t *ctx, CK_ATTRIBUTE_PTR pAttr, CK_ULONG nAttr,
                                 CK_OBJECT_HANDLE_PTR pHandle, int flagCountMustEqualOne) {
    CK_RV retCode = CKR_OK;
+#ifdef LUNA_OSSL_FIND_2_OBJECTS
    CK_OBJECT_HANDLE arrayHandle[2] = {LUNA_INVALID_HANDLE, LUNA_INVALID_HANDLE};
+#else
+   CK_OBJECT_HANDLE arrayHandle[1] = {LUNA_INVALID_HANDLE}; /* OPTIMIZE */
+#endif
    CK_ULONG nObjFound = 0;
    char itoabuf[LUNA_ATOI_BYTES];
 
@@ -5353,13 +5466,14 @@ static int luna_find_object_ex1(luna_context_t *ctx, CK_ATTRIBUTE_PTR pAttr, CK_
       goto err;
    }
 
+#ifdef LUNA_OSSL_CALL_FINAL
    (void)p11.std->C_FindObjectsFinal(ctx->hSession);
+#endif
    if (nObjFound < 1)
       goto err;
    if (arrayHandle[0] == LUNA_INVALID_HANDLE)
       goto err;
    IF_LUNA_DEBUG(luna_dump_l("FindObject.arrayHandle[0]", (long)arrayHandle[0]));
-   IF_LUNA_DEBUG(if (nObjFound >= 2) { luna_dump_l("FindObject.arrayHandle[1]", (long)arrayHandle[1]); });
    if (flagCountMustEqualOne && (nObjFound != 1)) {
       IF_LUNA_DEBUG(luna_dump_l("FindObject.duplicates", (long)nObjFound));
       LUNACA3err(LUNACA3_F_FINDOBJECT, LUNACA3_R_DUPLICATE);
@@ -5380,6 +5494,16 @@ static CK_RV STUB_CA_SetApplicationID(CK_ULONG major, CK_ULONG minor) { return C
 static CK_RV STUB_CT_HsmIdFromSlotId(CK_SLOT_ID slotID, unsigned int *pHsmID) { return CKR_OK; }
 
 static CK_RV STUB_CA_GetHAState(CK_SLOT_ID slotId, CK_HA_STATE_PTR pState) { return CKR_OK; }
+
+static CK_RV STUB_CA_DeriveKeyAndWrap(CK_SESSION_HANDLE hSession,          /* session */
+        CK_MECHANISM_PTR  pMechanism,        /* derive mechanism */
+        CK_OBJECT_HANDLE  hBaseKey,          /* base key */
+        CK_ATTRIBUTE_PTR  pTemplate,         /* extra derive parameters (public key?) */
+        CK_ULONG          ulAttributeCount,  /* template length */
+        CK_MECHANISM_PTR  pMechanismWrap,    /* wrap mechanism (can be no-encryption for now) */
+        CK_OBJECT_HANDLE  hWrappingKey,      /* wrap key (can be NULL for now) */
+        CK_BYTE_PTR       pWrappedKey,       /* gets wrapped key */
+        CK_ULONG_PTR      pulWrappedKeyLens) { return CKR_OK; }
 
 /* Get rsa extension */
 static int luna_get_rsa_ex(void) {
@@ -5575,11 +5699,22 @@ static int luna_get_enable_ec_gen_key_pair(void) {
    return value;
 }
 
-/* Get enable ed generate key pair */
+/* Get enable ec-edwards generate key pair */
 static int luna_get_enable_ed_gen_key_pair(void) {
    int value = 0;
    if (g_config.EnableEdGenKeyPair != NULL) {
       value = atoi(g_config.EnableEdGenKeyPair);
+   } else {
+      value = 0;
+   }
+   return value;
+}
+
+/* Get enable ec-montgomery generate key pair */
+static int luna_get_enable_em_gen_key_pair(void) {
+   int value = 0;
+   if (g_config.EnableEmGenKeyPair != NULL) {
+      value = atoi(g_config.EnableEmGenKeyPair);
    } else {
       value = 0;
    }
@@ -5996,7 +6131,9 @@ const char *szLunaEngineComment39 = "ExcludePqc was added";
 const char *szLunaEngineComment40 = "EnablePqcGenKeyPair was added";
 const char *szLunaEngineComment41 = "EnableEcGenKeyPair was added";
 const char *szLunaEngineComment42 = "RecoveryLevel was added";
-const char *szLunaEngineCommentDevel = "CommentDevel: openssl-3.2.1-sw12";
+const char *szLunaEngineComment43 = "EnableEdGenKeyPair was added";
+const char *szLunaEngineComment44 = "EnableEmGenKeyPair was added";
+const char *szLunaEngineCommentDevel = "CommentDevel: openssl-3.4.1-sw103";
 
 /* convert to CK_ULONG from ByteArray (little-endian) */
 static CK_ULONG luna_CK_ULONG_from_ByteArrayLE(CK_BYTE_PTR src, CK_ULONG srclen_) {
@@ -7470,7 +7607,9 @@ static int luna_find_object_inexact(luna_context_t *ctx, CK_ATTRIBUTE_PTR pAttr,
 
    /* FindObjectsFinal */
    if (have_init) {
+#ifdef LUNA_OSSL_CALL_FINAL
       (void)p11.std->C_FindObjectsFinal(ctx->hSession);
+#endif
       have_init = 0;
    }
 
@@ -8735,7 +8874,11 @@ err:
 static int luna_ckatab_test_unique(CK_SESSION_HANDLE hSession, CK_ATTRIBUTE *tab) {
    CK_RV retCode = CKR_OK;
    CK_ULONG obj_count = 0;
-   CK_OBJECT_HANDLE handles[2] = {0};
+#ifdef LUNA_OSSL_FIND_2_OBJECTS
+   CK_OBJECT_HANDLE handles[2] = {LUNA_INVALID_HANDLE, LUNA_INVALID_HANDLE};
+#else
+   CK_OBJECT_HANDLE handles[1] = {LUNA_INVALID_HANDLE}; /* OPTIMIZE */
+#endif
    char itoabuf[LUNA_ATOI_BYTES];
 
    memset(&handles, 0, sizeof(handles));
@@ -8757,7 +8900,7 @@ static int luna_ckatab_test_unique(CK_SESSION_HANDLE hSession, CK_ATTRIBUTE *tab
    }
 
    obj_count = 0;
-   retCode = p11.std->C_FindObjects(hSession, &handles[0], 2, &obj_count);
+   retCode = p11.std->C_FindObjects(hSession, &handles[0], LUNA_DIM(handles), &obj_count);
    if (((retCode != CKR_OK) && (!luna_pa_check_lib())) ||
        /*QQQ ProtectApp bundles key not found error in with general error
          so we need to consider a general error 'OK'*/
@@ -9035,8 +9178,8 @@ static int luna_pa_check_lib(void) {
 
 #ifdef LUNA_OSSL_PKEY_METHS
 
-/* max 3 including { NID_rsaEncryption, NID_rsassaPss, NID_dsa } */
-#define LUNA_PKEY_METH_NIDS_MAX_COUNT 3
+/* max 4 including { NID_rsaEncryption, NID_rsassaPss, NID_dsa, NID_ec } */
+#define LUNA_PKEY_METH_NIDS_MAX_COUNT 4
 
 static int luna_pkey_meth_nids_count = 0;
 static int luna_pkey_meth_nids[LUNA_PKEY_METH_NIDS_MAX_COUNT + 1] = {
@@ -9069,6 +9212,11 @@ static int luna_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth, const int **nids,
          (*pmeth) = p_luna_evp_pkey_dsa;
          break;
 #endif /* LUNA_DSA_USE_EVP_PKEY_METHS */
+#ifdef LUNA_EC_USE_EVP_PKEY_METHS
+      case NID_ec:
+         (*pmeth) = p_luna_evp_pkey_ec;
+         break;
+#endif /* LUNA_EC_USE_EVP_PKEY_METHS */
       default:
          (*pmeth) = NULL;
          break;
@@ -9108,6 +9256,11 @@ static int luna_pkey_asn1_meths(ENGINE *e, EVP_PKEY_ASN1_METHOD **ameth, const i
          (*ameth) = p_luna_asn1_dsa;
          break;
 #endif /* LUNA_DSA_USE_EVP_ASN1_METHS */
+#ifdef LUNA_EC_USE_EVP_ASN1_METHS
+      case NID_ec:
+         (*ameth) = p_luna_asn1_ec;
+         break;
+#endif /* LUNA_EC_USE_EVP_ASN1_METHS */
       default:
          (*ameth) = NULL;
          break;
@@ -9158,6 +9311,20 @@ static void luna_pkey_init_meth_table(void) {
    }
 #endif /* LUNA_DSA_USE_EVP_PKEY_METHS */
 
+#ifdef LUNA_EC_USE_EVP_PKEY_METHS
+   /* avoid enabling the pkey ec method if the base ec method is disabled! */
+   if ( ! luna_get_disable_ec() ) {
+      if (p_luna_evp_pkey_ec != NULL) {
+         luna_pkey_meth_nids[luna_pkey_meth_nids_count++] = NID_ec;
+#ifdef LUNA_EC_USE_EVP_ASN1_METHS
+         if (p_luna_asn1_ec != NULL) {
+            luna_pkey_asn1_meth_nids[luna_pkey_asn1_meth_nids_count++] = NID_ec;
+         }
+#endif /* LUNA_EC_USE_EVP_ASN1_METHS */
+      }
+   }
+#endif /* LUNA_EC_USE_EVP_PKEY_METHS */
+
    /* zero terminate */
    luna_pkey_meth_nids[luna_pkey_meth_nids_count] = 0;
    luna_pkey_asn1_meth_nids[luna_pkey_asn1_meth_nids_count] = 0;
@@ -9198,6 +9365,17 @@ static void luna_pkey_fini_meth_table(void) {
    }
 #endif /* LUNA_DSA_USE_EVP_ASN1_METHS */
 #endif /* LUNA_DSA_USE_EVP_PKEY_METHS */
+
+#ifdef LUNA_EC_USE_EVP_PKEY_METHS
+   if (p_luna_evp_pkey_ec != NULL) {
+      p_luna_evp_pkey_ec = NULL;
+   }
+#ifdef LUNA_EC_USE_EVP_ASN1_METHS
+   if (p_luna_asn1_ec != NULL) {
+      p_luna_asn1_ec = NULL;
+   }
+#endif /* LUNA_EC_USE_EVP_ASN1_METHS */
+#endif /* LUNA_EC_USE_EVP_PKEY_METHS */
 }
 
 #endif /* LUNA_OSSL_PKEY_METHS */
@@ -10240,12 +10418,38 @@ err:
 
 static int luna_rsa_security_bits(const EVP_PKEY *pkey) {
     RSA *rsa0 = LUNA_EVP_PKEY_get0_RSA((EVP_PKEY *)pkey);
+    if (rsa0 == NULL)
+        return 0;
     return RSA_security_bits(rsa0);
 }
 
 static int luna_dsa_security_bits(const EVP_PKEY *pkey) {
     DSA *dsa0 = LUNA_EVP_PKEY_get0_DSA((EVP_PKEY *)pkey);
+    if (dsa0 == NULL)
+        return 0;
     return DSA_security_bits(dsa0);
+}
+
+static int luna_ec_bits(const EVP_PKEY *pkey) {
+    EC_KEY *ec0 = LUNA_EVP_PKEY_get0_EC_KEY((EVP_PKEY *)pkey);
+    if (ec0 == NULL)
+        return 0;
+    return EC_GROUP_order_bits(EC_KEY_get0_group(ec0));
+}
+
+static int luna_ec_security_bits(const EVP_PKEY *pkey) {
+    int ecbits = luna_ec_bits(pkey);
+    if (ecbits >= 512)
+        return 256;
+    if (ecbits >= 384)
+        return 192;
+    if (ecbits >= 256)
+        return 128;
+    if (ecbits >= 224)
+        return 112;
+    if (ecbits >= 160)
+        return 80;
+    return ecbits / 2;
 }
 
 #endif
@@ -10260,6 +10464,68 @@ static char *luna_strncpy(char *dest, const char *src, size_t n) {
     dest[n - 1] = 0;
     return dest;
 }
+
+#if defined(LUNA_OSSL_METH_SET_CHECK_KEYPAIR) || defined(LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR)
+
+static int luna_rsa_check_keypair0(EVP_PKEY *pkey) {
+    RSA *rsa = LUNA_EVP_PKEY_get0_RSA(pkey);
+    if (rsa == NULL)
+        return 0;
+    const int rc_check = luna_rsa_check_private(rsa);
+    if (rc_check == LUNA_CHECK_IS_SOFTWARE) {
+        return RSA_check_key(rsa);
+    } else if (rc_check == LUNA_CHECK_IS_HARDWARE) {
+        return 1;
+    } else {
+        return 0;
+    }
+    return 0;
+}
+
+static int luna_dsa_check_keypair0(EVP_PKEY *pkey) {
+    DSA *dsa = LUNA_EVP_PKEY_get0_DSA(pkey);
+    if (dsa == NULL)
+        return 0;
+    const int rc_check = luna_dsa_check_private(dsa);
+    if (rc_check == LUNA_CHECK_IS_SOFTWARE) {
+        return 1; /* no such routine for DSA */
+    } else if (rc_check == LUNA_CHECK_IS_HARDWARE) {
+        return 1;
+    } else {
+        return 0;
+    }
+    return 0;
+}
+
+static int luna_ec_check_keypair0(EVP_PKEY *pkey) {
+    EC_KEY *eckey = LUNA_EVP_PKEY_get0_EC_KEY(pkey);
+    if (eckey == NULL)
+        return 0;
+    const int rc_check = luna_ecdsa_check_private(eckey);
+    if (rc_check == LUNA_CHECK_IS_SOFTWARE) {
+        return EC_KEY_check_key(eckey);
+    } else if (rc_check == LUNA_CHECK_IS_HARDWARE) {
+        return 1;
+    } else {
+        return 0;
+    }
+    return 0;
+}
+
+#endif /* LUNA_OSSL_METH_SET_CHECK_KEYPAIR || LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR */
+
+#ifdef LUNA_OSSL_ASN1_SET_CHECK_KEYPAIR
+static int luna_rsa_check_keypair1(const EVP_PKEY *pkey) {
+    return luna_rsa_check_keypair0((EVP_PKEY *)pkey);
+}
+static int luna_dsa_check_keypair1(const EVP_PKEY *pkey) {
+    return luna_dsa_check_keypair0((EVP_PKEY *)pkey);
+}
+static int luna_ec_check_keypair1(const EVP_PKEY *pkey) {
+    return luna_ec_check_keypair0((EVP_PKEY *)pkey);
+}
+#endif
+
 
 /*****************************************************************************/
 

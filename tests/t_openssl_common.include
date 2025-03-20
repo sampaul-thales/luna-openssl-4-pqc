@@ -14,32 +14,58 @@
 # makefile definitions for tests named "t_openssl_<algorithm>"
 #
 
+# usually set to 1, for luna provider
+PREFER_PROVIDER=1
+
+# usually set to 0, for luna provider
+PREFER_IMPLICIT=0
+PREFER_CLASSIC=0
+PREFER_OQSPROV=0
+
 #
 # provider
 #
 
 # software provider:
+ifeq ($(PREFER_IMPLICIT),1)
 # classic algorithms (implicit provider via openssl.cnf)
-#SW_PROVIDER =
-# classic algorithms (explicit provider)
-#SW_PROVIDER = -provider default
+SW_PROVIDER =
+else
+ifeq ($(PREFER_CLASSIC),1)
+# classic algorithms (default provider)
+SW_PROVIDER = -provider default
+else
+ifeq ($(PREFER_OQSPROV),1)
 # pqc testing with oqs provider
-#SW_PROVIDER = -provider default -provider oqsprovider
+SW_PROVIDER = -provider default -provider oqsprovider
+else
 # pqc testing with luna provider
 SW_PROVIDER = -provider lunaprov -provider default
+endif
+endif
+endif
 
 # hardware provider:
+ifeq ($(PREFER_IMPLICIT),1)
 # classic algorithms (implicit provider via openssl.cnf)
-#HW_PROVIDER =
-# classic algorithms (explicit provider)
-#HW_PROVIDER = -provider default
+HW_PROVIDER =
+else
+ifeq ($(PREFER_CLASSIC),1)
+# classic algorithms (default provider)
+HW_PROVIDER = -provider default
+else
+ifeq ($(PREFER_OQSPROV),1)
 # pqc testing with oqs provider
-#HW_PROVIDER = -provider default -provider oqsprovider
+HW_PROVIDER = -provider default -provider oqsprovider
+else
 # pqc testing with luna provider
 HW_PROVIDER = -provider lunaprov -provider default
+endif
+endif
+endif
 
 #
-# keyform
+# keyform param
 #
 
 SW_KEYFORM =
@@ -49,26 +75,20 @@ HW_KEYFORM =
 # engine
 #
 
-# force software keys
-#SW_ENGINE = $(SW_PROVIDER)
-#HW_ENGINE = $(SW_PROVIDER)
-
-# if openssl3 then
-  # if openssl3 provider then
-    SW_ENGINE = $(SW_PROVIDER)
-    HW_ENGINE = $(HW_PROVIDER)
-    HW_KEYFORM =
-  # else if openssl3 engine then
-    #SW_ENGINE = $(SW_PROVIDER)
-    #HW_ENGINE = $(SW_PROVIDER) -engine gem
-    #HW_KEYFORM = -keyform ENGINE
-  # endif
-# else
-  #SW_ENGINE =
-  #HW_ENGINE = -engine gem
-  #HW_KEYFORM = -keyform ENGINE
-# endif
-
+ifeq ($(PREFER_PROVIDER),1)
+  SW_ENGINE = $(SW_PROVIDER)
+  HW_ENGINE = $(HW_PROVIDER)
+  HW_KEYFORM =
+else
+  ifeq ($(PREFER_IMPLICIT),1)
+    SW_ENGINE =
+    HW_ENGINE =
+  else
+    SW_ENGINE =
+    HW_ENGINE = -engine gem
+  endif
+  HW_KEYFORM = -keyform ENGINE
+endif
 
 #
 # default digest to use

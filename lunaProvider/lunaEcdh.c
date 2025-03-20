@@ -287,7 +287,7 @@ int luna_ecdh_set_ctx_params(void *vpecdhctx, const OSSL_PARAM params[])
         pectx->kdf_md = EVP_MD_fetch(pectx->libctx, name, mdprops);
         if (pectx->kdf_md == NULL)
             return 0;
-        if (!ossl_digest_is_allowed(pectx->libctx, pectx->kdf_md)) {
+        if (!LUNAPROV_ossl_digest_is_allowed(pectx->libctx, pectx->kdf_md)) {
             EVP_MD_free(pectx->kdf_md);
             pectx->kdf_md = NULL;
             return 0;
