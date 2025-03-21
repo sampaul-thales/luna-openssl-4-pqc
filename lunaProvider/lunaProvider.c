@@ -804,7 +804,6 @@ int get_composite_idx(int idx)
     }
     return ret;
 }
-#endif
 
 #endif
 
