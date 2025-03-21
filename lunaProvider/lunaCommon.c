@@ -2987,8 +2987,6 @@ err:
     return 0;
 }
 
-#ifdef LUNA_OQS
-
 static
 int luna_prov_ecx_dhkem_derive_private_sw(struct ecx_gen_ctx *gctx,
         ECX_KEY *ecx, unsigned char *privout) {
