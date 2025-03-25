@@ -1084,7 +1084,6 @@ static const OSSL_ALGORITHM luna_keymgmt[] = {
 #ifndef OPENSSL_NO_EC
     { PROV_NAMES_EC, LUNA_PROV_EQUALS_SZ, luna_ec_keymgmt_functions,
       PROV_DESCS_EC },
-# ifdef LUNA_OQS
 # ifndef OPENSSL_NO_ECX
 #  ifdef LUNA_OQS
     { PROV_NAMES_X25519, LUNA_PROV_EQUALS_SZ, luna_x25519_keymgmt_functions, PROV_DESCS_X25519 },
@@ -1095,7 +1094,6 @@ static const OSSL_ALGORITHM luna_keymgmt[] = {
       PROV_DESCS_ED448 },
 #  endif /* LUNA_OQS */
 # endif /* OPENSSL_NO_ECX */
-#endif /* LUNA_OQS */
 #endif /* OPENSSL_NO_EC */
 #ifndef OPENSSL_NO_SM2
     //{ PROV_NAMES_SM2, LUNA_PROV_EQUALS_SZ, luna_sm2_keymgmt_functions, PROV_DESCS_SM2 },

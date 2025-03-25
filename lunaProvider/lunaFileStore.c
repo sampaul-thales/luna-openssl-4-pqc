@@ -464,7 +464,6 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
             if (pktype == EVP_PKEY_ED25519 || pktype == EVP_PKEY_ED448
                     || pktype == EVP_PKEY_X25519 || pktype == EVP_PKEY_X448) {
                 const ECX_KEY *ecx = NULL;
-#ifdef LUNA_OQS
                 LUNA_PRINTF(("luna_prov_ecx_fix_public...\n"));
                 if (pktype == EVP_PKEY_ED25519) {
                     ecx = ossl_evp_pkey_get1_ED25519(pk);
@@ -478,7 +477,6 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
                 LUNA_ASSERT(ecx != NULL);
                 (void)luna_prov_ecx_fix_public((ECX_KEY *)ecx);
                 LUNA_PRINTF(("luna_prov_ecx_fix_public... ok.\n"));
-#endif
 
                 /* NOTE: We must create a new EVP_PKEY that is associated with our provider.
                  * Otherwise, the ecx_backend will clobber the public key using the EVP_PKEY
