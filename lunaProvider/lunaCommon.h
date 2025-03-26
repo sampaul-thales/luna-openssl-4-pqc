@@ -67,6 +67,28 @@
 #include "oqs_prov.h"
 #endif // LUNA_OQS
 
+/* detect openssl 3.2 */
+#if (1) && (OPENSSL_VERSION_NUMBER >= 0x30200000L)
+#define LUNA_OSSL_3_2 (1)
+#endif
+
+#ifndef LUNA_OSSL_3_2
+#ifndef OSSL_DISPATCH_END
+#define OSSL_DISPATCH_END { 0, NULL }
+#endif
+#endif
+
+/* detect openssl 3.4 */
+#if (1) && (OPENSSL_VERSION_NUMBER >= 0x30400000L)
+#define LUNA_OSSL_3_4 (1)
+#endif
+
+/* detect openssl 3.0.7 */
+#if (1) && (OPENSSL_VERSION_NUMBER >= 0x30000070L)
+#define LUNA_OSSL_3_0_7 (1)
+#define LUNA_FIPS (1)
+#endif
+
 /* luna dispatch functions */
 extern const OSSL_DISPATCH luna_rsa_signature_functions[];
 extern const OSSL_DISPATCH luna_rsa_asym_cipher_functions[];
@@ -271,6 +293,7 @@ const OSSL_PARAM *LUNAPROV_EVP_MD_gettable_ctx_params(const LUNAPROV_EVP_MD *md)
 const OSSL_PARAM *LUNAPROV_EVP_MD_settable_ctx_params(const LUNAPROV_EVP_MD *md);
 int LUNAPROV_ossl_digest_get_approved_nid_with_sha1(OSSL_LIB_CTX *ctx, const LUNAPROV_EVP_MD *md, int sha1_allowed);
 int LUNAPROV_ossl_digest_rsa_sign_get_md_nid(OSSL_LIB_CTX *ctx, const LUNAPROV_EVP_MD *md, int sha1_allowed);
+int LUNAPROV_ossl_digest_is_allowed(OSSL_LIB_CTX *ctx, const LUNAPROV_EVP_MD *md);
 const EVP_MD *LUNAPROV_EVP_MD_get_tmp_md(const LUNAPROV_EVP_MD *md);
 
 #ifdef LUNAPROV_ENABLE_MD_WRAPPER

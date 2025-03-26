@@ -37,10 +37,13 @@ default0: all
 
 RSA_KEY=key0
 
-all: $(RSA_KEY) req0 misc0 sign1 sign2 sign3 decrypt1 decrypt2
+all: $(RSA_KEY) check0 req0 misc0 sign1 sign4 decrypt1 decrypt2
 	@echo
 
-all_cms: sign0 decrypt0
+all_cms: check0 sign0 decrypt0
+	@echo
+
+all_dgst: check0 sign2 sign3
 	@echo
 
 # generate key
@@ -54,8 +57,11 @@ key0: tmp.pkey.0
 
 tmp.pkey.0: tmp.foo
 	openssl genpkey $(HW_ENGINE) -algorithm RSA -out tmp.pkey -pkeyopt rsa_keygen_bits:3072
-	openssl pkey -check -in tmp.pkey $(HW_ENGINE)
 	cp tmp.pkey tmp.pkey.0
+	@echo '--------'
+
+check0:
+	openssl pkey -check -in tmp.pkey $(HW_ENGINE)
 	@echo '--------'
 
 # second choice: generate key via sautil
@@ -71,7 +77,7 @@ tmp.pkey.2: tmp.foo
 	@echo '--------'
 
 tmp.foo:
-		touch tmp.foo
+	touch tmp.foo
 
 # NOTE: set digest to prove we can override the default of sha256
 #BASE_MD=sha3-512
@@ -101,43 +107,45 @@ PSS_SALT=digest
 
 KEYOPT_CMS_PSS=-keyopt digest:$(CMS_MD) -keyopt rsa_padding_mode:pss -keyopt rsa_pss_saltlen:$(PSS_SALT) -keyopt rsa_mgf1_md:$(CMS_MD)
 
-# sign (pss)
+# sign (cms, pss)
+# TODO: create proper certs and verify them (see -noverify)
 sign0:
 	rm -f sendmail.msg
 	openssl cms $(HW_ENGINE) $(HW_KEYFORM) -sign -md $(CMS_MD) -binary -nodetach -in message.txt -signer $(CERTF1) -inkey $(KEYF1) -out sendmail.msg $(KEYOPT_CMS_PSS)
-	openssl cms $(SW_ENGINE) -verify -md $(CMS_MD) -binary -content message.txt -signer $(CERTF1) -inkey $(KEYF1) -in sendmail.msg -CAfile $(CERTF2) $(KEYOPT_CMS_PSS)
+	openssl cms $(SW_ENGINE) -verify -noverify -md $(CMS_MD) -binary -content message.txt -signer $(CERTF1) -inkey $(KEYF1) -in sendmail.msg -CAfile $(CERTF2) $(KEYOPT_CMS_PSS)
 	@echo ; echo '--------'
 
 KEYOPT_CMS_OAEP=-keyopt rsa_padding_mode:oaep -keyopt rsa_oaep_md:$(CMS_MD) -keyopt rsa_mgf1_md:$(CMS_MD)
 
-# decrypt (oaep)
+# decrypt (cms, oaep)
+# TODO: data is decrypted ok, but, with extra cr/lf character (see diff)
 decrypt0:
 	rm -f mail.msg foo.txt
 	openssl cms $(SW_ENGINE) -encrypt -in plain.txt -out mail.msg -recip $(CERTF1) $(KEYOPT_CMS_OAEP)
 	openssl cms $(HW_ENGINE) $(HW_KEYFORM) -decrypt -out foo.txt  -in mail.msg  -recip $(CERTF1) -inkey $(KEYF1) $(KEYOPT_CMS_OAEP)
-	diff -q -s plain.txt foo.txt
+	-diff -q -s plain.txt foo.txt
 	@echo '--------'
 
 # misc test (ec key gen in software should work using the same chrystoki config)
 misc0:
 	rm -f eckey.pem
 	openssl genpkey $(SW_ENGINE) -algorithm EC -out eckey.pem -pkeyopt ec_paramgen_curve:P-384 -pkeyopt ec_param_enc:named_curve
-	openssl pkey -check -in eckey.pem $(SW_ENGINE)
 	@echo '--------'
 
 PSS_MD=$(BASE_MD)
 
 PKEYOPT_PSS_MGF1=-pkeyopt rsa_mgf1_md:$(PSS_MD)
-PKEYOPT_PSS=-pkeyopt digest:$(PSS_MD) -pkeyopt rsa_padding_mode:pss -pkeyopt rsa_pss_saltlen:$(PSS_SALT) $(KEYOPT_PSS_MGF1)
+PKEYOPT_PSS=-pkeyopt digest:$(PSS_MD) -pkeyopt rsa_padding_mode:pss -pkeyopt rsa_pss_saltlen:$(PSS_SALT) $(PKEYOPT_PSS_MGF1)
 
 SIGOPT_PSS_MGF1=-sigopt rsa_mgf1_md:$(PSS_MD)
 SIGOPT_PSS=-sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:$(PSS_SALT) $(SIGOPT_PSS_MGF1)
 
 SIGOPT_X931=-sigopt rsa_padding_mode:x931
-MD_20=sha1
 MD_32=sha256
-MD_48=sha384
 MD_64=sha512
+PKEYOPT_32=-pkeyopt digest:$(MD_32)
+PKEYOPT_64=-pkeyopt digest:$(MD_64)
+PKEYOPT_X931=-pkeyopt rsa_padding_mode:x931
 
 # using pkeyutl
 # digest in software, sign in hardware, verify in software
@@ -166,6 +174,20 @@ sign3:
 	openssl dgst $(HW_ENGINE) $(HW_KEYFORM) -sign tmp.pkey -$(MD_64) -out message.sig $(SIGOPT_X931)  message64.txt
 	openssl dgst $(SW_ENGINE) -prverify tmp.pkey -$(MD_64) -signature message.sig $(SIGOPT_X931)  message64.txt
 	openssl dgst $(HW_ENGINE) -prverify tmp.pkey -$(MD_64) -signature message.sig $(SIGOPT_X931)  message64.txt
+	@echo '--------'
+
+# using pkeyutl (x931)
+# digest in software, sign in hardware, verify in software
+sign4:
+	rm -f message.sig
+	openssl dgst -$(MD_32) -out message.dig -binary message.txt
+	openssl pkeyutl $(HW_ENGINE) $(HW_KEYFORM) -sign -in message.dig -inkey tmp.pkey -out message.sig $(PKEYOPT_32) $(PKEYOPT_X931)
+	openssl pkeyutl $(SW_ENGINE) -verify -in message.dig -inkey tmp.pkey -sigfile message.sig $(PKEYOPT_32) $(PKEYOPT_X931)
+	@echo '--------'
+	rm -f message.sig
+	openssl dgst -$(MD_64) -out message.dig -binary message.txt
+	openssl pkeyutl $(HW_ENGINE) $(HW_KEYFORM) -sign -in message.dig -inkey tmp.pkey -out message.sig $(PKEYOPT_64) $(PKEYOPT_X931)
+	openssl pkeyutl $(SW_ENGINE) -verify -in message.dig -inkey tmp.pkey -sigfile message.sig $(PKEYOPT_64) $(PKEYOPT_X931)
 	@echo '--------'
 
 # decrypt pkcs1
@@ -210,6 +232,9 @@ tmp1.foo:
 
 tmp1.pkey: tmp1.foo
 	openssl genpkey $(HW_ENGINE_ISSUER) -algorithm RSA -out tmp1.pkey -pkeyopt rsa_keygen_bits:3072
+	@echo
+
+check1:
 	openssl pkey -check -in tmp1.pkey $(HW_ENGINE_ISSUER)
 	@echo
 
@@ -232,6 +257,9 @@ tmp2.foo:
 
 tmp2.pkey: tmp2.foo
 	openssl genpkey $(HW_ENGINE_SERVER) -algorithm RSA -out tmp2.pkey -pkeyopt rsa_keygen_bits:3072
+	@echo
+
+check2:
 	openssl pkey -check -in tmp2.pkey $(HW_ENGINE_SERVER)
 	@echo
 

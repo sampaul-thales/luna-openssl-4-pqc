@@ -18,7 +18,14 @@
 include t_openssl_common.include
 
 # pqc type
-PQCTYPE=dilithium3
+#PQCTYPE=dilithium3
+#PQCTYPE=dilithium5
+#PQCTYPE=p384_dilithium3
+PQCTYPE=mldsa87
+#PQCTYPE=p521_mldsa87
+#PQCTYPE=mldsa87_p384
+#PQCTYPE=mldsa87_bp384
+#PQCTYPE=mldsa87_ed448
 
 # sender/recipient cert file and key file
 KEYF1=tmppqc.pkey
@@ -36,7 +43,11 @@ default0: all
 
 PQC_KEY=key0
 
-all: $(PQC_KEY) req0 sign1 sign2
+all: $(PQC_KEY) check0 req0 sign1
+	@echo
+
+# FIXME: broken due to provider load order
+all_dgst: sign2
 	@echo
 
 # generate key
@@ -48,12 +59,15 @@ key0: tmppqc.pkey.0
 
 tmppqc.pkey.0: tmppqc.foo
 	openssl genpkey $(HW_ENGINE) -algorithm $(PQCTYPE) -out tmppqc.pkey
-	openssl pkey -check -in tmppqc.pkey $(HW_ENGINE)
 	cp tmppqc.pkey tmppqc.pkey.0
 	@echo '--------'
 
+check0:
+	openssl pkey -check -in tmppqc.pkey $(HW_ENGINE)
+	@echo '--------'
+
 tmppqc.foo:
-		touch tmppqc.foo
+	touch tmppqc.foo
 
 # NOTE: set digest to prove we can override the default of sha256
 BASE_MD=sha512

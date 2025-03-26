@@ -590,7 +590,9 @@ CK_RV LunaPqcSigSign(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
         rv = P11->C_SignInit(session, &mechSig, privateObjectHandle);
     }
 
-    // TODO: the PQC FM (or SHIM) does not follow pkcs11 calling convention when
+#if 0
+    // NOTE: the old version of the shim/fm required this check, which slows things down:
+    // the PQC FM (or SHIM) does not follow pkcs11 calling convention when
     // the application calls C_Sign ONCE with a signatureLen larger than the actual length.
     // Also, the PQC FM (or SHIM) should fail when input is signatureLen=0, signature not NULL.
     // Instead, output is CKR_OK, with signatureLen=4, signature={ 0, 0, 0, 0 }.
@@ -610,6 +612,7 @@ CK_RV LunaPqcSigSign(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
             }
         }
     }
+#endif
 
     if (rv == CKR_OK) {
         rv = P11->C_Sign(session, (CK_BYTE*)message, messageLen, signature, pulSignatureLen);

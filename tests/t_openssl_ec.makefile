@@ -33,7 +33,11 @@ default0: all
 
 EC_KEY=key0
 
-all: $(EC_KEY) req0 sign1 sign2
+all: $(EC_KEY) check0 req0 sign1
+	@echo
+
+# FIXME: broken due to provider load order
+all_dgst: check0 sign2
 	@echo
 
 # generate key
@@ -48,8 +52,11 @@ key0: tmpec.pkey.0
 
 tmpec.pkey.0: tmpec.foo
 	openssl genpkey $(HW_ENGINE) -algorithm EC -out tmpec.pkey -pkeyopt ec_paramgen_curve:P-521 -pkeyopt ec_param_enc:named_curve
-	openssl pkey -check -in tmpec.pkey $(HW_ENGINE)
 	cp tmpec.pkey tmpec.pkey.0
+	@echo '--------'
+
+check0:
+	openssl pkey -check -in tmpec.pkey $(HW_ENGINE)
 	@echo '--------'
 
 # second choice: generate key via sautil

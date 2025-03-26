@@ -25,36 +25,62 @@ include t_openssl_common.include
 REQ_DIGEST=sha512
 X509_SIGOPT=
 
+# misc preference
+PREFER_PQC_CA=0
+PREFER_PQC_SERVER=0
+PREFER_ECDHE=0
+PREFER_DHE=0
+PREFER_EC=0
+
+# root CA cert
+ifeq ($(PREFER_PQC_CA),1)
+GENPKEY1_ALGORITHM=-algorithm mldsa87
+#GENPKEY1_ALGORITHM=-algorithm p521_mldsa87
+GENPKEY1_PKEYOPT=
+REQ1_SIGOPT=
+REQ1_SIGOPT=-sigopt digest:$(REQ_DIGEST)
+else
 # root CA cert (RSA)
 GENPKEY1_ALGORITHM=-algorithm RSA
 GENPKEY1_PKEYOPT=-pkeyopt rsa_keygen_bits:3072
 REQ1_SIGOPT=
+#REQ1_SIGOPT=-sigopt digest:$(REQ_DIGEST)
+endif
 
+# intermediate CA cert
+ifeq ($(PREFER_PQC_CA),1)
+GENPKEY2_ALGORITHM=-algorithm mldsa65
+#GENPKEY2_ALGORITHM=-algorithm p384_mldsa65
+GENPKEY2_PKEYOPT=
+REQ2_SIGOPT=
+REQ2_SIGOPT=-sigopt digest:$(REQ_DIGEST)
+else
 # intermediate CA cert (EC)
 GENPKEY2_ALGORITHM=-algorithm EC
 GENPKEY2_PKEYOPT=-pkeyopt ec_paramgen_curve:P-521 -pkeyopt ec_param_enc:named_curve
 REQ2_SIGOPT=
+#REQ2_SIGOPT=-sigopt digest:$(REQ_DIGEST)
+endif
 
 #
 # server cert (PQC)
 #
 
-#KEYTYPE=RSA
-#GENPKEY3_ALGORITHM=-algorithm RSA
-#GENPKEY3_PKEYOPT=-pkeyopt rsa_keygen_bits:3072
-#REQ3_SIGOPT=
+ifneq ($(PREFER_PQC_SERVER),1)
 
-#KEYTYPE=EC
-#GENPKEY3_ALGORITHM=-algorithm EC
-#GENPKEY3_PKEYOPT=-pkeyopt ec_paramgen_curve:P-521 -pkeyopt ec_param_enc:named_curve
-#REQ3_SIGOPT=
+ifneq ($(PREFER_ECDHE),1)
+KEYTYPE=RSA
+GENPKEY3_ALGORITHM=-algorithm RSA
+GENPKEY3_PKEYOPT=-pkeyopt rsa_keygen_bits:3072
+REQ3_SIGOPT=
+else
+KEYTYPE=EC
+GENPKEY3_ALGORITHM=-algorithm EC
+GENPKEY3_PKEYOPT=-pkeyopt ec_paramgen_curve:P-521 -pkeyopt ec_param_enc:named_curve
+REQ3_SIGOPT=
+endif
 
-# NOTE: DSA is broken wrt TLS
-#KEYTYPE=DSA
-#GENPKEY3_ALGORITHM=
-#GENPKEY3_PKEYOPT=-paramfile tmpdsaparam.pem
-#REQ3_SIGOPT=
-#REQ_DIGEST=sha224
+else
 
 #KEYTYPE=PQC
 #GENPKEY3_ALGORITHM=-algorithm dilithium3
@@ -64,12 +90,12 @@ REQ2_SIGOPT=
 
 KEYTYPE=PQC
 #GENPKEY3_ALGORITHM=-algorithm mldsa65
-#GENPKEY3_ALGORITHM=-algorithm p384_mldsa65
+GENPKEY3_ALGORITHM=-algorithm p384_mldsa65
 #GENPKEY3_ALGORITHM=-algorithm mldsa65_pss3072
 #GENPKEY3_ALGORITHM=-algorithm mldsa65_rsa3072
 #GENPKEY3_ALGORITHM=-algorithm mldsa65_p256
 #GENPKEY3_ALGORITHM=-algorithm mldsa65_bp256
-GENPKEY3_ALGORITHM=-algorithm mldsa65_ed25519
+#GENPKEY3_ALGORITHM=-algorithm mldsa65_ed25519
 #GENPKEY3_ALGORITHM=-algorithm ed25519
 #GENPKEY3_ALGORITHM=-algorithm ed448
 #GENPKEY3_ALGORITHM=-algorithm mldsa44
@@ -86,14 +112,22 @@ GENPKEY3_ALGORITHM=-algorithm mldsa65_ed25519
 #GENPKEY3_ALGORITHM=-algorithm mldsa87_bp384
 #GENPKEY3_ALGORITHM=-algorithm mldsa87_ed448
 GENPKEY3_PKEYOPT=
-#REQ3_SIGOPT=-sigopt digest:$(REQ_DIGEST)
 # NOTE: for algorithm ed25519/ed448 the digest is not settable, by lunaprov, and by oqsprovider
 REQ3_SIGOPT=
+REQ3_SIGOPT=-sigopt digest:$(REQ_DIGEST)
+
+endif
 
 # server tls1.2 (RSA)
+ifneq ($(PREFER_EC),1)
 GENPKEY4_ALGORITHM=-algorithm RSA
 GENPKEY4_PKEYOPT=-pkeyopt rsa_keygen_bits:3072
 REQ4_SIGOPT=
+else
+GENPKEY4_ALGORITHM=-algorithm EC
+GENPKEY4_PKEYOPT=-pkeyopt ec_paramgen_curve:P-521 -pkeyopt ec_param_enc:named_curve
+REQ4_SIGOPT=
+endif
 
 ###############################################################################
 
@@ -105,8 +139,13 @@ default0:
 	@echo
 
 # tls server dependencies (CA key in software)
+ifeq ($(PREFER_PQC_CA),1)
+HW_ENGINE_CA=$(SW_ENGINE)
+HW_KEYFORM_CA=$(SW_KEYFORM)
+else
 HW_ENGINE_CA=
 HW_KEYFORM_CA=
+endif
 
 # self signed root ca cert (between 3 and 5 years)
 tmp1.foo:
@@ -141,7 +180,7 @@ tmp2.csr: tmp2.pkey
 	@echo
 
 tmp2.crt: tmp2.csr tmp1.crt
-	openssl x509 $(HW_ENGINE_SERVER) $(HW_KEYFORM_SERVER) -$(REQ_DIGEST) -outform PEM -req -days 1095 -in tmp2.csr -CA tmp1.crt -CAkey tmp1.pkey -out tmp2.crt -extfile ext_ca.cnf $(X509_SIGOPT)
+	openssl x509 $(HW_ENGINE_CA) $(HW_KEYFORM_CA) -$(REQ_DIGEST) -outform PEM -req -days 1095 -in tmp2.csr -CA tmp1.crt -CAkey tmp1.pkey -out tmp2.crt -extfile ext_ca.cnf $(X509_SIGOPT)
 	@echo
 
 # tls server dependencies (server key in hardware)
@@ -151,19 +190,40 @@ tmp2.crt: tmp2.csr tmp1.crt
 HW_ENGINE_SERVER=$(HW_ENGINE)
 HW_KEYFORM_SERVER=$(HW_KEYFORM)
 
-#SW_ENGINE_CLIENT=$(SW_ENGINE)
-#SW_KEYFORM_CLIENT=$(SW_KEYFORM)
-SW_ENGINE_CLIENT=$(HW_ENGINE)
-SW_KEYFORM_CLIENT=$(HW_KEYFORM)
+SW_ENGINE_CLIENT=$(SW_ENGINE)
+SW_KEYFORM_CLIENT=$(SW_KEYFORM)
+#SW_ENGINE_CLIENT=$(HW_ENGINE)
+#SW_KEYFORM_CLIENT=$(HW_KEYFORM)
+
+ifeq ($(PREFER_PQC_SERVER),1)
 
 # google chrome (preferred order of algos)
 #TLSGROUPS=x25519_kyber768
 #TLSGROUPS=p384_kyber768
+#TLSGROUPS=x448_kyber768
+#TLSGROUPS=kyber768
 
 # mlkem (preferred order of algos)
 #TLSGROUPS=x448_mlkem768
 TLSGROUPS=x25519_mlkem768
 #TLSGROUPS=p384_mlkem768
+#TLSGROUPS=p256_mlkem768
+#TLSGROUPS=mlkem768
+
+else
+
+#TLSGROUPS=x448
+TLSGROUPS=x25519
+#TLSGROUPS=P-384
+#TLSGROUPS=P-256
+
+endif
+
+ifeq ($(TLSGROUPS),)
+  GROUPS_OPTS=
+else
+  GROUPS_OPTS=-groups $(TLSGROUPS)
+endif
 
 # server cert (between 90 and 398 days), tls1.3
 tmp3.foo:
@@ -201,33 +261,39 @@ tmp4.crt: tmp4.csr tmp2.crt
 	openssl x509 $(HW_ENGINE_SERVER) $(HW_KEYFORM_SERVER) -$(REQ_DIGEST) -outform PEM -req -days 398 -in tmp4.csr -CA tmp2.crt -CAkey tmp2.pkey -out tmp4.crt -extfile ext_server.cnf $(X509_SIGOPT)
 	@echo
 
+QUIET_SERVER=-quiet -verify_quiet -ign_eof
+
 # tls 1.3 server
 s_server: s_server3
 	@echo
 
+SERVER_CAFILE=-CAfile tmp11.crt
+
 s_server3: tmp3.crt tmp11.crt
 	@echo "INFO: testing client auth using option -CAfile."
-	openssl s_server $(HW_ENGINE_SERVER) $(HW_KEYFORM_SERVER) -cert tmp3.crt -key tmp3.pkey -tls1_3 -groups $(TLSGROUPS) -CAfile tmp11.crt
+	openssl s_server $(HW_ENGINE_SERVER) $(HW_KEYFORM_SERVER) $(QUIET_SERVER) -cert tmp3.crt -key tmp3.pkey -tls1_3 $(GROUPS_OPTS) $(SERVER_CAFILE)
 	@echo
 
 # tls 1.2 server
 s_server2: tmp4.crt tmp11.crt
 	@echo "INFO: testing client auth using option -CAfile."
-	openssl s_server $(HW_ENGINE_SERVER) $(HW_KEYFORM_SERVER) -cert tmp4.crt -key tmp4.pkey -tls1_2 -CAfile tmp11.crt
+	openssl s_server $(HW_ENGINE_SERVER) $(HW_KEYFORM_SERVER) $(QUIET_SERVER) -cert tmp4.crt -key tmp4.pkey -tls1_2 $(SERVER_CAFILE)
 	@echo
 
 # tls 1.3 client
 s_client: s_client3
 	@echo
 
+CLIENT_CAFILE=-CAfile tmp3.cafile
+
 s_client3: tmp3.cafile tmp13.crt
 	@echo "INFO: testing server auth using option -CAfile."
-	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -CAfile tmp3.cafile -tls1_3 -groups $(TLSGROUPS) -cert tmp13.crt -key tmp13.pkey
+	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_3 $(GROUPS_OPTS) -cert tmp13.crt -key tmp13.pkey $(CLIENT_CAFILE)
 	@echo
 
 s_client3_apache2: tmp3.cafile tmp13.crt
 	@echo "INFO: testing apache server auth using option -CAfile."
-	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -CAfile tmp3.cafile -tls1_3 -groups $(TLSGROUPS) -cert tmp13.crt -key tmp13.pkey  \
+	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_3 $(GROUPS_OPTS) -cert tmp13.crt -key tmp13.pkey $(CLIENT_CAFILE) \
 	  -connect VirtualHost0:8443 \
 	  -security_debug_verbose \
 	  -debug \
@@ -237,18 +303,35 @@ s_client3_apache2: tmp3.cafile tmp13.crt
 	@echo
 
 # SSLCipherSuite @SECLEVEL=2:
-TLSCIPHER=AES256-GCM-SHA384
-#TLSCIPHER=AES128-GCM-SHA256
+ifeq ($(PREFER_ECDHE),1)
+  ifeq ($(PREFER_EC),1)
+    TLSCIPHER=ECDHE-ECDSA-AES256-GCM-SHA384
+  else
+    TLSCIPHER=ECDHE-RSA-AES256-GCM-SHA384
+  endif
+else
+  ifeq ($(PREFER_DHE),1)
+    TLSCIPHER=DHE-RSA-AES256-GCM-SHA384
+  else
+    TLSCIPHER=AES256-GCM-SHA384
+  endif
+endif
+
+ifeq ($(TLSCIPHER),)
+  CIPHER_OPTS=
+else
+  CIPHER_OPTS=-cipher $(TLSCIPHER)
+endif
 
 # tls 1.2 client
 s_client2: tmp3.cafile tmp14.crt
 	@echo "INFO: testing server auth using option -CAfile."
-	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -CAfile tmp3.cafile -tls1_2 -cipher $(TLSCIPHER) -cert tmp14.crt -key tmp14.pkey
+	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_2 $(CIPHER_OPTS) -cert tmp14.crt -key tmp14.pkey $(CLIENT_CAFILE)
 	@echo
 
 s_client2_apache2: tmp3.cafile tmp14.crt
 	@echo "INFO: testing server auth using option -CAfile."
-	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -CAfile tmp3.cafile -tls1_2 -cipher $(TLSCIPHER) -cert tmp14.crt -key tmp14.pkey \
+	openssl s_client $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_2 $(CIPHER_OPTS) -cert tmp14.crt -key tmp14.pkey $(CLIENT_CAFILE) \
 	  -connect VirtualHost0:8443 \
 	  -security_debug_verbose \
 	  -debug \
@@ -285,12 +368,12 @@ s_time: s_time3
 	@echo
 
 s_time3: tmp3.cafile tmp13.crt
-	openssl s_time $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -CAfile tmp3.cafile -tls1_3 -cert tmp13.crt -key tmp13.pkey \
+	openssl s_time $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_3 -cert tmp13.crt -key tmp13.pkey $(CLIENT_CAFILE) \
 	  -time 15 -verify 2
 	@echo
 
 s_time2: tmp3.cafile tmp14.crt
-	openssl s_time $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -CAfile tmp3.cafile -tls1_2 -cipher $(TLSCIPHER) -cert tmp14.crt -key tmp14.pkey \
+	openssl s_time $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_2 $(CIPHER_OPTS) -cert tmp14.crt -key tmp14.pkey $(CLIENT_CAFILE) \
 	  -time 15 -verify 2
 	@echo
 

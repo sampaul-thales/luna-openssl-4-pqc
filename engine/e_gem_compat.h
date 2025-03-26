@@ -57,6 +57,11 @@ extern "C" {
       #define LUNA_DSA_USE_EVP_PKEY_METHS 1
       #define LUNA_RSA_USE_EVP_ASN1_METHS 1 /* for rsa keygen issues */
       #define LUNA_DSA_USE_EVP_ASN1_METHS 1 /* for dsa keygen issues */
+      #if 1
+      /* for EC not appearing in capabilities */
+      #define LUNA_EC_USE_EVP_PKEY_METHS 1
+      #define LUNA_EC_USE_EVP_ASN1_METHS 1
+      #endif
    #endif
 
 #else /* OPENSSL_VERSION_NUMBER */
@@ -363,6 +368,9 @@ static int LUNA_EC_copy_from_pkey(EC_KEY *dsa, const EVP_PKEY *pkey);
 #endif
 #if defined(LUNA_DSA_USE_EVP_ASN1_METHS) && !defined(LUNA_DSA_USE_EVP_PKEY_METHS)
 #error "dsa sanity test failed"
+#endif
+#if defined(LUNA_EC_USE_EVP_ASN1_METHS) && !defined(LUNA_EC_USE_EVP_PKEY_METHS)
+#error "ec sanity test failed"
 #endif
 
 /* Support C or C++ compiler in the field */

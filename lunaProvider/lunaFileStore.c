@@ -201,14 +201,24 @@ static void *file_open_dir(const char *path, const char *uri, void *provctx)
     return NULL;
 }
 
-#ifndef LUNA_OQS
+#ifndef LUNA_OSSL_3_2
+
+/* Check if |pre|, which must be a string literal, is a prefix of |str| */
+#define HAS_PREFIX(str, pre) (strncmp(str, pre "", sizeof(pre) - 1) == 0)
+/* As before, and if check succeeds, advance |str| past the prefix |pre| */
+#define CHECK_AND_SKIP_PREFIX(str, pre) \
+    (HAS_PREFIX(str, pre) ? ((str) += sizeof(pre) - 1, 1) : 0)
 /* Check if the string literal |p| is a case-insensitive prefix of |s| */
 #define HAS_CASE_PREFIX(s, p) (OPENSSL_strncasecmp(s, p "", sizeof(p) - 1) == 0)
 /* As before, and if check succeeds, advance |str| past the prefix |pre| */
 #define CHECK_AND_SKIP_CASE_PREFIX(str, pre) \
-	    (HAS_CASE_PREFIX(str, pre) ? ((str) += sizeof(pre) - 1, 1) : 0)
+    (HAS_CASE_PREFIX(str, pre) ? ((str) += sizeof(pre) - 1, 1) : 0)
 /* Check if the string literal |suffix| is a case-insensitive suffix of |str| */
-#endif //ifndef LUNA_OQS
+#define HAS_CASE_SUFFIX(str, suffix) (strlen(str) < sizeof(suffix) - 1 ? 0 : \
+    OPENSSL_strcasecmp(str + strlen(str) - sizeof(suffix) + 1, suffix "") == 0)
+
+#endif // LUNA_OSSL_3_2
+
 static void *file_open(void *provctx, const char *uri)
 {
     struct file_ctx_st *ctx = NULL;
@@ -450,10 +460,10 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
         if (OSSL_STORE_INFO_get_type(info) == OSSL_STORE_INFO_PKEY) {
             EVP_PKEY *pk = OSSL_STORE_INFO_get0_PKEY(info);
             const int pktype = EVP_PKEY_get_id(pk);
+#ifdef LUNA_OQS
             if (pktype == EVP_PKEY_ED25519 || pktype == EVP_PKEY_ED448
                     || pktype == EVP_PKEY_X25519 || pktype == EVP_PKEY_X448) {
                 const ECX_KEY *ecx = NULL;
-#ifdef LUNA_OQS
                 LUNA_PRINTF(("luna_prov_ecx_fix_public...\n"));
                 if (pktype == EVP_PKEY_ED25519) {
                     ecx = ossl_evp_pkey_get1_ED25519(pk);
@@ -467,7 +477,6 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
                 LUNA_ASSERT(ecx != NULL);
                 (void)luna_prov_ecx_fix_public((ECX_KEY *)ecx);
                 LUNA_PRINTF(("luna_prov_ecx_fix_public... ok.\n"));
-#endif
 
                 /* NOTE: We must create a new EVP_PKEY that is associated with our provider.
                  * Otherwise, the ecx_backend will clobber the public key using the EVP_PKEY
@@ -487,6 +496,9 @@ static int file_load_construct(OSSL_DECODER_INSTANCE *decoder_inst,
                 //FIXME:OSSL_STORE_INFO_free(info);
 
             } else if (pktype == EVP_PKEY_DSA) {
+#else // LUNA_OQS
+            if (pktype == EVP_PKEY_DSA) {
+#endif // LUNA_OQS
                 const DSA *ecx = EVP_PKEY_get0_DSA(pk);
                 LUNA_ASSERT(ecx != NULL);
 

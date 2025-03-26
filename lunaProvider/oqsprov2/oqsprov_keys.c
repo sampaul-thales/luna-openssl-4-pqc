@@ -55,7 +55,8 @@ typedef struct {
 static int oqsx_key_recreate_classickey(OQSX_KEY *key, oqsx_key_op_t op);
 
 /* added for luna hsm */
-static int lunax_oqsx_key_gen_oqs_ndx(OQSX_KEY *key, int ndx_in, int is_kem, int is_hybrid, int is_composite);
+static int lunax_oqsx_key_gen_oqs_ndx(OQSX_KEY *key, int ndx_in, int is_kem, int is_hybrid,
+        int is_composite, int is_delegated);
 
 ///// OQS_TEMPLATE_FRAGMENT_OQSNAMES_START
 
@@ -1762,27 +1763,9 @@ int oqsx_key_fromdata(OQSX_KEY *key, const OSSL_PARAM params[],
     return 1;
 }
 
-#if 0
 // OQS key always the last of the numkeys comp keys
-static int oqsx_key_gen_oqs(OQSX_KEY *key, int gen_kem)
-{
-    if (gen_kem)
-        return OQS_KEM_keypair(key->oqsx_provider_ctx.oqsx_qs_ctx.kem,
-                               key->comp_pubkey[key->numkeys - 1],
-                               key->comp_privkey[key->numkeys - 1]);
-    else {
-        return OQS_SIG_keypair(key->oqsx_provider_ctx.oqsx_qs_ctx.sig,
-                               key->comp_pubkey[key->numkeys - 1],
-                               key->comp_privkey[key->numkeys - 1]);
-    }
-}
-//ret = OQS_SIG_keypair(key->oqsx_provider_ctx.oqsx_qs_ctx.sig,
-//                      key->comp_pubkey[i],
-//                      key->comp_privkey[i]);
-#endif
-
-// OQS key always the last of the numkeys comp keys
-static int lunax_oqsx_key_gen_oqs_ndx(OQSX_KEY *key, int ndx_in, int is_kem, int is_hybrid, int is_composite) {
+static int lunax_oqsx_key_gen_oqs_ndx(OQSX_KEY *key, int ndx_in, int is_kem, int is_hybrid,
+        int is_composite, int is_delegated) {
     int rc = 0;
     int ndx = ndx_in;
     luna_prov_key_bits foo = {0};
@@ -1795,10 +1778,11 @@ static int lunax_oqsx_key_gen_oqs_ndx(OQSX_KEY *key, int ndx_in, int is_kem, int
     foo.is_kem = is_kem;
     foo.is_hybrid = is_hybrid;
     foo.is_composite = is_composite;
+    foo.is_delegated = is_delegated;
     foo.ok = 1;
 
     if ( is_kem ) {
-        if (LUNA_OQS_QUERY_KEM_keypair(key->lunakeyctx) == LUNA_OQS_OK) {
+        if ( (is_delegated == 0) && (LUNA_OQS_QUERY_KEM_keypair(key->lunakeyctx) == LUNA_OQS_OK) ) {
             rc = LUNA_OQS_KEM_keypair(key->lunakeyctx, &foo);
 
         } else {
@@ -1943,12 +1927,16 @@ int oqsx_key_gen(OQSX_KEY *key)
     if (key->keytype == KEY_TYPE_KEM) {
         ret = !oqsx_key_set_composites(key);
         ON_ERR_GOTO(ret, err_gen);
-        ret = lunax_oqsx_key_gen_oqs_ndx(key, -1, 1, 0, 0);
+        ret = lunax_oqsx_key_gen_oqs_ndx(key, -1, 1, 0, 0, 0);
     } else if (key->keytype == KEY_TYPE_ECP_HYB_KEM
                || key->keytype == KEY_TYPE_ECX_HYB_KEM
                || key->keytype == KEY_TYPE_HYB_SIG) {
         const int flagPqcKeyInHardware = (LUNA_OQS_QUERY_KEM_keypair(key->lunakeyctx) == LUNA_OQS_OK);
         const int flagPqcKeyPersistent = (key->keytype == KEY_TYPE_HYB_SIG);
+        const int flagKem = (key->keytype == KEY_TYPE_ECP_HYB_KEM || key->keytype == KEY_TYPE_ECX_HYB_KEM);
+        const int flagHybrid = 1;
+        const int flagDelegatable = (key->keytype == KEY_TYPE_ECP_HYB_KEM);
+        const int flagDelegate = 0; /* FIXME:FIXME: luna_get_DelegateHwPqcKemEncapToSw(); */
         pkey = lunax_oqsx_key_gen_evp_key(key->oqsx_provider_ctx.oqsx_evp_ctx,
                                     key->pubkey, key->privkey, 1,
                                     flagPqcKeyInHardware, flagPqcKeyPersistent);
@@ -1959,7 +1947,14 @@ int oqsx_key_gen(OQSX_KEY *key)
                         key->privkeylen, key->pubkeylen);
 
         key->classical_pkey = pkey;
-        ret = lunax_oqsx_key_gen_oqs_ndx(key, -1, (key->keytype != KEY_TYPE_HYB_SIG), 1, 0);
+        /* check DelegateHwPqcKemEncapToSw  */
+        if (flagPqcKeyInHardware && !flagPqcKeyPersistent && flagKem && flagHybrid
+                && flagDelegatable && flagDelegate) {
+            ret = lunax_oqsx_key_gen_oqs_ndx(key, -1, flagKem, flagHybrid, 0, 1);
+        } else {
+            ret = lunax_oqsx_key_gen_oqs_ndx(key, -1, flagKem, flagHybrid, 0, 0);
+        }
+
     } else if (key->keytype == KEY_TYPE_CMP_SIG) {
         int i;
         ret = oqsx_key_set_composites(key);
@@ -1982,7 +1977,7 @@ int oqsx_key_gen(OQSX_KEY *key)
                 //ret = OQS_SIG_keypair(key->oqsx_provider_ctx.oqsx_qs_ctx.sig,
                 //                      key->comp_pubkey[i],
                 //                      key->comp_privkey[i]);
-                ret = lunax_oqsx_key_gen_oqs_ndx(key, i, 0, 0, 1);
+                ret = lunax_oqsx_key_gen_oqs_ndx(key, i, 0, 0, 1, 0);
                 OPENSSL_free(name);
                 ON_ERR_GOTO(ret, err_gen);
             }
@@ -1991,7 +1986,7 @@ int oqsx_key_gen(OQSX_KEY *key)
     } else if (key->keytype == KEY_TYPE_SIG) {
         ret = !oqsx_key_set_composites(key);
         ON_ERR_GOTO(ret, err_gen);
-        ret = lunax_oqsx_key_gen_oqs_ndx(key, -1, 0, 0, 0);
+        ret = lunax_oqsx_key_gen_oqs_ndx(key, -1, 0, 0, 0, 0);
     } else {
         ret = 1;
     }

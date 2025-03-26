@@ -129,6 +129,9 @@ lunaprov_deps.c \
 lunaprov_deps.def \
 lunaFileStore.h \
 lunaFileAny2obj.c \
+luna_decoders.inc \
+luna_encoders.inc \
+lunaprov_capabilities.c \
 lunaFileStore.c"
 
 
@@ -235,6 +238,8 @@ for file in build.sh generate.sh ; do
   ginstall -o root -g root -m 0755 $file  $GEMENGINE
 done
 
+#Install docs
+mkdir -p -m 775 $GEMENGINE/docs
 # obsolete: README-KEYSECURE
 for file in README-GEMBUILD README-GEM-CONFIG README-OPENSSL-CONFIG README-CMS README-DSA README-ECDSA README-RSA README-ENGINEPERF README-OBUILD README-OPENSSH README-PASSDLL README-SAUTIL README-APACHE README-BIND ; do
 	ginstall -o root -g root -m 0644 docs/$file  $GEMENGINE/docs

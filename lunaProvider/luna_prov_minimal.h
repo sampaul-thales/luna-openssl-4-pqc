@@ -21,7 +21,7 @@
 #ifdef NDEBUG
 #define LUNA_PRINTF(a_)
 #else
-#define LUNA_PRINTF(a_) if (getenv("LUNAPROV")) { printf("LUNA: %s: ", __func__); printf a_; }
+#define LUNA_PRINTF(a_) if (luna_getenv_LUNAPROV()) { printf("LUNA: %s: ", __func__); printf a_; }
 #endif
 
 /* luna provider key reason (i.e., was it generated new, or, read from a file old) */
@@ -55,6 +55,7 @@ typedef struct luna_prov_key_bits_st {
     int is_kem;
     int is_hybrid;
     int is_composite;
+    int is_delegated;
 } luna_prov_key_bits;
 
 /*
@@ -114,5 +115,10 @@ void LUNA_OQS_READKEY_UNLOCK(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *keyin
 
 /* misc */
 #define LUNA_POINTER_ADD(_vp, _ofs)  ( (void*) ( ((unsigned char*)(_vp)) + (_ofs) ) )
+
+/* query environment variable, faster */
+extern void luna_getenv_LUNAPROV_init(void);
+extern int luna_getenv_LUNAPROV_rc;
+#define luna_getenv_LUNAPROV() (luna_getenv_LUNAPROV_rc == 1)
 
 #endif

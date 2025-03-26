@@ -21,7 +21,11 @@
 #define P11_CHECK_COUNT(_count) ( (luna_have_c_init != 1) || ((_count) != luna_count_c_init) )
 #define KEYCTX_CHECK_COUNT(_ctx)  ( P11_CHECK_COUNT((_ctx)->count_c_init) )
 #define DIM LUNA_DIM /* array dimension */
-#define LUNA_RSAWRAP_KEYBITS 1024 /* TODO: small RSA keysize so wrapping performance is not too bad */
+#ifdef LUNA_OSSL_3_4
+#define LUNA_RSAWRAP_KEYBITS 2048
+#else
+#define LUNA_RSAWRAP_KEYBITS 1024
+#endif
 
 #define CK_INVALID_X 0x7FFFFFFFUL
 #define CKM_INVALID CK_INVALID_X
@@ -101,7 +105,11 @@ int luna_prov_rsa_check_key(OSSL_LIB_CTX *ctx, const RSA *rsa, int operation)
     const int rc_check = ( (operation & (EVP_PKEY_OP_VERIFY | EVP_PKEY_OP_ENCRYPT)) == 0 ) ?
             luna_prov_rsa_check_private(rsa) : luna_prov_rsa_check_public(rsa);
     if (luna_prov_check_is_software(rc_check)) {
+#ifdef LUNA_OSSL_3_4
+        return ossl_rsa_check_key_size(rsa, 1);
+#else
         return ossl_rsa_check_key(ctx, rsa, operation);
+#endif
     } else if (luna_prov_check_is_hardware(rc_check)) {
         return 1;
     } else {
@@ -116,7 +124,12 @@ int luna_prov_ec_check_key(OSSL_LIB_CTX *ctx, const EC_KEY *ec, int protect)
     const int rc_check = protect ?
             luna_prov_ec_check_private(ec) : luna_prov_ec_check_public(ec);
     if (luna_prov_check_is_software(rc_check)) {
+#ifdef LUNA_OSSL_3_4
+        const EC_GROUP *grp = EC_KEY_get0_group(ec);
+        return ossl_ec_check_security_strength(grp, 1);
+#else
         return ossl_ec_check_key(ctx, ec, protect);
+#endif
     } else if (luna_prov_check_is_hardware(rc_check)) {
         return 1;
     } else {
@@ -131,7 +144,11 @@ int luna_prov_dsa_check_key(OSSL_LIB_CTX *ctx, const DSA *dsa, int sign)
     const int rc_check = sign ?
             luna_prov_dsa_check_private(dsa) : luna_prov_dsa_check_public(dsa);
     if (luna_prov_check_is_software(rc_check)) {
+#ifdef LUNA_OSSL_3_4
+        return ossl_dsa_check_key(dsa, 1);
+#else
         return ossl_dsa_check_key(ctx, dsa, sign);
+#endif
     } else if (luna_prov_check_is_hardware(rc_check)) {
         return 1;
     } else {
@@ -424,15 +441,11 @@ int luna_prov_EC_KEY_generate_key_ex(EC_KEY *key, int lunaflags)
     /* for keygen, the engine does not redirect to software so we must redirect here */
     if ( ( lunaflags & LUNA_PROV_FLAGS_SOFTWARE_OBJECT ) ||
             ( ! luna_get_enable_ec_gen_key_pair() ) ) {
-        /* keygen in software */
-        if (saved_ecdsa_keygen != NULL) {
-            return saved_ecdsa_keygen(key);
-        }
-        return 0;
+        return EC_KEY_generate_key(key);
     }
     /* keygen in hardware */
     const int flagSessionObject = (lunaflags & LUNA_PROV_FLAGS_SESSION_OBJECT ? 1 : 0);
-    const int flagDerive = 1;
+    const int flagDerive = 1; /* FIXME:SW: sometimes 0 ? */
     return luna_ec_keygen_hw_ex(key, flagSessionObject, flagDerive);
 }
 
@@ -508,6 +521,8 @@ static EVP_PKEY *luna_init_wrapping_pkey_deferred(int bits);
 /* software wrapping keypair */
 static EVP_PKEY *luna_wrapping_pkey = NULL;
 static int luna_wrapping_error = 0;
+static CK_ULONG luna_wrapping_handle = 0;
+static unsigned luna_wrapping_count_c_init = 0;
 
 /* key identifiers */
 typedef enum luna_prov_ctxtype_e {
@@ -570,6 +585,10 @@ typedef struct luna_prov_keyinfo_st {
 
 static CK_RV LunaUnwrapKeyBytes(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
     CK_OBJECT_HANDLE hObject, CK_BYTE *psecret, CK_ULONG secretLen);
+
+static CK_RV LunaDeriveUnwrapKeyBytes(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
+    CK_MECHANISM_PTR pMechDerive, CK_OBJECT_HANDLE hBaseKey, CK_ATTRIBUTE_PTR pAttr, CK_ULONG nAttr,
+    CK_BYTE *psecret, CK_ULONG secretLen);
 
 /*****************************************************************************/
 
@@ -1047,7 +1066,13 @@ static CK_RV LunaLookupAlgName(luna_prov_key_ctx *keyctx,
 
 static CK_RV LunaFind(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
     CK_ATTRIBUTE *a, CK_ULONG n, CK_OBJECT_HANDLE *ph) {
-    CK_OBJECT_HANDLE hObject[2] = { CK_INVALID_HANDLE, CK_INVALID_HANDLE };
+
+#ifdef LUNA_OSSL_FIND_2_OBJECTS
+   CK_OBJECT_HANDLE hObject[2] = {LUNA_INVALID_HANDLE, LUNA_INVALID_HANDLE};
+#else
+   CK_OBJECT_HANDLE hObject[1] = {LUNA_INVALID_HANDLE}; /* OPTIMIZE */
+#endif
+
     CK_ULONG ulCount = 0;
     CK_SESSION_HANDLE session = pkeyinfo->sess.hSession;
     CK_RV rv = P11->C_FindObjectsInit(session, a, n);
@@ -1056,7 +1081,9 @@ static CK_RV LunaFind(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
         return rv;
     }
     rv = P11->C_FindObjects(session, hObject, DIM(hObject), &ulCount);
+#ifdef LUNA_OSSL_CALL_FINAL
     (void)P11->C_FindObjectsFinal(session);
+#endif
     if (rv != CKR_OK) {
         luna_context_set_last_error(&pkeyinfo->sess, rv);
         return rv;
@@ -1230,8 +1257,7 @@ static int LUNA_OQS_QUERY_classic_keypair(luna_prov_key_ctx *keyctx) {
         }
         break;
     case CKK_EC_MONTGOMERY:
-        // FIXME: if (luna_get_enable_em_gen_key_pair() != 1) {
-        if (luna_get_enable_ed_gen_key_pair() != 1) {
+        if (luna_get_enable_em_gen_key_pair() != 1) {
             rc = LUNA_OQS_ERROR;
         }
         break;
@@ -2340,13 +2366,43 @@ const char *LUNAPROV_EVP_MD_get0_name(const LUNAPROV_EVP_MD *md)
 int LUNAPROV_ossl_digest_get_approved_nid_with_sha1(OSSL_LIB_CTX *ctx, const LUNAPROV_EVP_MD *md, int sha1_allowed)
 {
     LUNA_PRINTF(("\n"));
+#ifdef LUNA_OSSL_3_4
+    int mdnid = ossl_digest_get_approved_nid(md);
+
+#if (0) && !defined(OPENSSL_NO_FIPS_SECURITYCHECKS)
+    if (ossl_securitycheck_enabled(ctx)) {
+        if (mdnid == NID_undef || (mdnid == NID_sha1 && !sha1_allowed))
+            mdnid = -1; /* disallowed by security checks */
+    }
+#endif
+    return mdnid;
+#else
     return ossl_digest_get_approved_nid_with_sha1(ctx, md, sha1_allowed);
+#endif
 }
 
 int LUNAPROV_ossl_digest_rsa_sign_get_md_nid(OSSL_LIB_CTX *ctx, const LUNAPROV_EVP_MD *md, int sha1_allowed)
 {
     LUNA_PRINTF(("\n"));
+#ifdef LUNA_OSSL_3_4
+    return ossl_digest_rsa_sign_get_md_nid(md);
+#else
     return ossl_digest_rsa_sign_get_md_nid(ctx, md, sha1_allowed);
+#endif
+}
+
+int LUNAPROV_ossl_digest_is_allowed(OSSL_LIB_CTX *ctx, const LUNAPROV_EVP_MD *md)
+{
+    LUNA_PRINTF(("\n"));
+#ifdef LUNA_OSSL_3_4
+#if (0) && !defined(OPENSSL_NO_FIPS_SECURITYCHECKS)
+    if (ossl_securitycheck_enabled(ctx))
+        return ossl_digest_get_approved_nid(md) != NID_undef;
+# endif /* OPENSSL_NO_FIPS_SECURITYCHECKS */
+    return 1;
+#else
+    return ossl_digest_is_allowed(ctx, md);
+#endif
 }
 
 const OSSL_PARAM *LUNAPROV_EVP_MD_gettable_ctx_params(const LUNAPROV_EVP_MD *md)
@@ -2423,6 +2479,8 @@ static void luna_init_ecdh(void) {
     // zeroize wrapping key (a new one will be generated)
     luna_wrapping_pkey = NULL;
     luna_wrapping_error = 0;
+    luna_wrapping_handle = 0;
+    luna_wrapping_count_c_init = 0;
 }
 
 static CK_RV LunaEcdhComputeKey(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
@@ -2471,6 +2529,20 @@ static CK_RV LunaEcdhComputeKey(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pk
         }
     }
 
+#if 1
+    // OPTIMIZATION: derive and wrap
+    if (rv == CKR_OK) {
+        rv = LunaDeriveUnwrapKeyBytes(keyctx, pkeyinfo,
+                &decapMech, privateObjectHandle, decapTemplate, DIM(decapTemplate),
+                psecret, secretLen);
+        if (rv != CKR_OK) {
+            LUNA_PRINTF(("ECDH compute and wrap failed: 0x%lx\n", rv));
+        } else {
+            LUNA_PRINTF(("ECDH compute and wrap was successful\n"));
+        }
+    }
+
+#else
     // Perform the decapsulation using the private key
     CK_SESSION_HANDLE session = pkeyinfo->sess.hSession;
     if (rv == CKR_OK) {
@@ -2496,13 +2568,23 @@ static CK_RV LunaEcdhComputeKey(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pk
         (void)P11->C_DestroyObject(session, decapObjectHandle);
         decapObjectHandle = 0;
     }
+#endif
 
     luna_context_set_last_error(&pkeyinfo->sess, rv);
     return rv;
 }
 
+typedef struct LunaUnwrapKeyBytesOAEP_st {
+    CK_MECHANISM_PTR pMechDerive;
+    CK_OBJECT_HANDLE hBaseKey;
+    CK_ATTRIBUTE_PTR pAttr;
+    CK_ULONG nAttr;
+} LunaUnwrapKeyBytesOAEP_st;
+
 static CK_RV LunaUnwrapKeyBytesOAEP(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
-    CK_OBJECT_HANDLE hObject, CK_BYTE *psecret, CK_ULONG secretLen) {
+    CK_OBJECT_HANDLE hObject, CK_BYTE *psecret, CK_ULONG secretLen,
+    LunaUnwrapKeyBytesOAEP_st *px) {
+
     CK_RV rv = CKR_OK;
     const unsigned bits = LUNA_RSAWRAP_KEYBITS;
     CK_OBJECT_HANDLE hWrapper = 0;
@@ -2513,7 +2595,7 @@ static CK_RV LunaUnwrapKeyBytesOAEP(luna_prov_key_ctx *keyctx, luna_prov_keyinfo
     if (pkey == NULL)
         rv = CKR_KEY_NEEDED;
     // import sw rsa public to hw
-    if (rv == CKR_OK) {
+    if (rv == CKR_OK && (luna_wrapping_handle == 0 || luna_wrapping_count_c_init != luna_count_c_init)) {
         CK_ULONG ckoClass = CKO_PUBLIC_KEY;
         CK_ULONG ckkType = CKK_RSA;
         CK_BBOOL yes = CK_TRUE;
@@ -2539,7 +2621,13 @@ static CK_RV LunaUnwrapKeyBytesOAEP(luna_prov_key_ctx *keyctx, luna_prov_keyinfo
             rv = CKR_GENERAL_ERROR;
         if (rv == CKR_OK) {
             rv = P11->C_CreateObject(session, attr, DIM(attr), &hWrapper);
+            if (rv == CKR_OK) {
+                luna_wrapping_handle = hWrapper;
+                luna_wrapping_count_c_init = luna_count_c_init;
+            }
         }
+    } else {
+        hWrapper = luna_wrapping_handle;
     }
     // hw wrap the tls key
     if (rv == CKR_OK) {
@@ -2556,7 +2644,13 @@ static CK_RV LunaUnwrapKeyBytesOAEP(luna_prov_key_ctx *keyctx, luna_prov_keyinfo
         params->ulSourceDataLen = 0;
         ulWrapped = (bits / 8);
         pWrapped = (CK_BYTE*)malloc(ulWrapped);
-        rv = P11->C_WrapKey(session, &mechWrap, hWrapper, hObject, pWrapped, &ulWrapped);
+        if (px == NULL) {
+            rv = P11->C_WrapKey(session, &mechWrap, hWrapper, hObject, pWrapped, &ulWrapped);
+        } else {
+            rv = p11.ext.CA_DeriveKeyAndWrap(session,
+                    px->pMechDerive, px->hBaseKey, px->pAttr, px->nAttr,
+                    &mechWrap, hWrapper, pWrapped, &ulWrapped);
+        }
     }
     // sw unwrap the tls key
     if (rv == CKR_OK) {
@@ -2627,27 +2721,48 @@ static CK_RV LunaUnwrapKeyBytesOAEP(luna_prov_key_ctx *keyctx, luna_prov_keyinfo
         memset(pWrapped, 0, ulWrapped);
         free(pWrapped);
     }
-    if (hWrapper != 0) {
-        (void)P11->C_DestroyObject(session, hWrapper);
-    }
     luna_context_set_last_error(&pkeyinfo->sess, rv);
     return rv;
 }
 
-static CK_RV LunaUnwrapKeyBytes(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
-    CK_OBJECT_HANDLE hObject, CK_BYTE *psecret, CK_ULONG secretLen) {
-
+static CK_RV LunaUnwrapKeyBytes_prep(void) {
     /* generate the software wrapping keypair once, shortly after the provider is initialized */
     if (luna_wrapping_pkey == NULL && luna_wrapping_error == 0) {
         luna_wrapping_pkey = luna_init_wrapping_pkey_deferred(LUNA_RSAWRAP_KEYBITS);
         if (luna_wrapping_pkey == NULL)
             luna_wrapping_error = 1;
+        luna_wrapping_handle = 0;
+        luna_wrapping_count_c_init = 0;
     }
 
     if (luna_wrapping_error != 0)
         return CKR_GENERAL_ERROR;
 
-    return LunaUnwrapKeyBytesOAEP(keyctx, pkeyinfo, hObject, psecret, secretLen);
+    return CKR_OK;
+}
+
+static CK_RV LunaUnwrapKeyBytes(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
+    CK_OBJECT_HANDLE hObject, CK_BYTE *psecret, CK_ULONG secretLen) {
+
+    if (LunaUnwrapKeyBytes_prep() != CKR_OK)
+        return CKR_GENERAL_ERROR;
+
+    return LunaUnwrapKeyBytesOAEP(keyctx, pkeyinfo, hObject, psecret, secretLen, NULL);
+}
+
+static CK_RV LunaDeriveUnwrapKeyBytes(luna_prov_key_ctx *keyctx, luna_prov_keyinfo *pkeyinfo,
+    CK_MECHANISM_PTR pMechDerive, CK_OBJECT_HANDLE hBaseKey, CK_ATTRIBUTE_PTR pAttr, CK_ULONG nAttr,
+    CK_BYTE *psecret, CK_ULONG secretLen) {
+
+    if (LunaUnwrapKeyBytes_prep() != CKR_OK)
+        return CKR_GENERAL_ERROR;
+
+    LunaUnwrapKeyBytesOAEP_st foo;
+    foo.pMechDerive = pMechDerive;
+    foo.hBaseKey = hBaseKey;
+    foo.pAttr = pAttr;
+    foo.nAttr = nAttr;
+    return LunaUnwrapKeyBytesOAEP(keyctx, pkeyinfo, 0, psecret, secretLen, &foo);
 }
 
 /* derive key (ECDH) */
@@ -3204,4 +3319,19 @@ int luna_prov_ecx_compute_key(luna_prov_key_ctx *keyctx,
         in, inlen);
     return rc == LUNA_OQS_OK ? 1 : 0;
 }
-#endif
+
+#endif // LUNA_OQS
+
+int luna_getenv_LUNAPROV_rc = 0;
+
+// query environment variable, faster
+void luna_getenv_LUNAPROV_init(void) {
+    if (luna_getenv_LUNAPROV_rc == 0) {
+        if (getenv("LUNAPROV") != NULL) {
+            luna_getenv_LUNAPROV_rc = 1;
+        } else {
+            luna_getenv_LUNAPROV_rc = -1;
+        }
+    }
+}
+

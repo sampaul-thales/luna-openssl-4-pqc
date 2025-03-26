@@ -18,7 +18,11 @@
 # as of openssl3, stop supporting 1.0.2
 # as of openssl 3.2.1, stop supporting 32-bit
 # known good versions: VERSIONS="1.1.1w 3.2.1"
-VERSIONS="3.2.1"
+#VERSIONS="3.2.1"
+#VERSIONS="3.2.2"
+#VERSIONS="3.0.16"
+#VERSIONS="3.4.1"
+VERSIONS="3.0.7"
 LIBOQS_VERSION="0.10.0"
 
 VERSION=""
