@@ -1,7 +1,7 @@
 
 # Luna Crypto Provider (lunaprov)
 
-This project offers a plugin to Open SSL (3.2) for the purpose of generating and using cryptographic keys on a [Luna General Purpose HSMs](https://cpl.thalesgroup.com/encryption/hardware-security-modules/general-purpose-hsms), and more specifically [Luna Network HSMs](https://cpl.thalesgroup.com/encryption/hardware-security-modules/network-hsms). 
+This project offers a plugin to Open SSL (3.0.7+, 3.1, 3.2, 3.3, 3.4, 3.5) for the purpose of generating and using cryptographic keys on a [Luna General Purpose HSMs](https://cpl.thalesgroup.com/encryption/hardware-security-modules/general-purpose-hsms), and more specifically [Luna Network HSMs](https://cpl.thalesgroup.com/encryption/hardware-security-modules/network-hsms). 
 
 ## Introduction
 
@@ -10,9 +10,10 @@ lunaprov is based on the [PKCS#11 specification](https://docs.oasis-open.org/pkc
 It has been tested with the Luna Network HSM.
 
 lunaprov allows to:
--	Create keypair (RSA, DSA, EC, PQC, ED25519/448, X25519/448).
+-	Create classic keypair (RSA, DSA, EC), using Open SSL 3.0 and above.
+-	Create keypair (PQC, ED25519/448, X25519/448), using Open SSL 3.2 and above.
 -	Sign certificate or other data.
--   Establish TLS connection (KEM and certificate authentication).
+- Establish TLS connection (certificate authentication, key exchange, KEM).
 
 These operations require to create partitions, register clients, initialize user roles, etc. These tasks can be performed using:
 - The [Luna Universal Client](https://thalesdocs.com/gphsm/luna/7/docs/network/Content/Utilities/Preface.htm)
