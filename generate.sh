@@ -22,7 +22,8 @@
 #VERSIONS="3.2.2"
 #VERSIONS="3.0.16"
 #VERSIONS="3.4.1"
-VERSIONS="3.0.7"
+#VERSIONS="3.0.7"
+VERSIONS="3.5.0"
 LIBOQS_VERSION="0.10.0"
 
 VERSION=""
@@ -407,7 +408,7 @@ fi
 for i in $VERSIONS; do
 	VERSION=$i
 	# NOTE: stream 3.0 implies provider added, 3.2 implies pqc added
-	STREAM=$(echo $VERSION | sed -e "s/[a-z]*//g" -e "s/3.[0-1].[0-9]*/3.0/g" -e "s/3.[2-9].[0-9]*/3.2/g")
+	STREAM=$(echo $VERSION | sed -e "s/[a-z]*//g" -e "s/3.[0-1].[0-9]*-*[0-9]*/3.0/g" -e "s/3.[2-9].[0-9]*-*[0-9]*/3.2/g")
 	generate_build_all
 	if [ $? -ne 0 ]; then
 		echo "ERROR: failed generate_build_all"

@@ -73,20 +73,32 @@ tmppqc.foo:
 BASE_MD=sha512
 
 PKCS_MD=$(BASE_MD)
+PKCS_MD_OPTS=-$(PKCS_MD)
+ifneq ($(PKCS_MD),)
 SIGOPT_REQ=-sigopt digest:$(PKCS_MD)
 SIGOPT_X509=-sigopt digest:$(PKCS_MD)
+else
+SIGOPT_REQ=
+SIGOPT_X509=
+endif
 
 # sign cert request
 # NOTE: it is discouraged to add options after "-pkeyopt OPTIONS" or "-sigopt OPTIONS"
 req0:
 	rm -f tmppqc.csr tmppqc.crt
-	openssl req $(HW_ENGINE) $(HW_KEYFORM) -$(PKCS_MD) -verbose -new -nodes -key $(KEYF1) -out tmppqc.csr -subj "/CN=t_openssl_pqc" -verify $(SIGOPT_REQ)
-	openssl x509 $(HW_ENGINE) $(HW_KEYFORM) -$(PKCS_MD) -trustout -outform PEM -req -days 7305 -in tmppqc.csr -signkey $(KEYF1) -out tmppqc.crt $(SIGOPT_X509)
+	openssl req $(HW_ENGINE) $(HW_KEYFORM) $(PKCS_MD_OPTS) -verbose -new -nodes -key $(KEYF1) -out tmppqc.csr -subj "/CN=t_openssl_pqc" -verify $(SIGOPT_REQ)
+	openssl x509 $(HW_ENGINE) $(HW_KEYFORM) $(PKCS_MD_OPTS) -trustout -outform PEM -req -days 7305 -in tmppqc.csr -signkey $(KEYF1) -out tmppqc.crt $(SIGOPT_X509)
 	@echo '--------'
 
 PQC_MD=$(BASE_MD)
+PQC_MD_OPTS=-$(PQC_MD)
+ifneq ($(PQC_MD),)
 PKEYOPT_PQC=-pkeyopt digest:$(PQC_MD)
 SIGOPT_PQC=-sigopt digest:$(PQC_MD)
+else
+PKEYOPT_PQC=
+SIGOPT_PQC=
+endif
 
 # using pkeyutl
 # digest in software, sign in hardware, verify in software
@@ -99,8 +111,8 @@ sign1:
 # using dgst
 # sign in hardware, verify in software
 sign2:
-	openssl dgst $(HW_ENGINE) $(HW_KEYFORM) -sign tmppqc.pkey -$(PQC_MD) -out message.sig $(SIGOPT_PQC)  message.txt
-	openssl dgst $(SW_ENGINE) -prverify tmppqc.pkey -$(PQC_MD) -signature message.sig $(SIGOPT_PQC)  message.txt
+	openssl dgst $(HW_ENGINE) $(HW_KEYFORM) -sign tmppqc.pkey $(PQC_MD_OPTS) -out message.sig $(SIGOPT_PQC)  message.txt
+	openssl dgst $(SW_ENGINE) -prverify tmppqc.pkey $(PQC_MD_OPTS) -signature message.sig $(SIGOPT_PQC)  message.txt
 	@echo '--------'
 
 # clean all temp files

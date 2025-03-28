@@ -89,6 +89,11 @@
 #define LUNA_FIPS (1)
 #endif
 
+/* detect openssl 3.5.0 */
+#if (1) && (OPENSSL_VERSION_NUMBER >= 0x30500000L)
+#define LUNA_OSSL_3_5 (1)
+#endif
+
 /* luna dispatch functions */
 extern const OSSL_DISPATCH luna_rsa_signature_functions[];
 extern const OSSL_DISPATCH luna_rsa_asym_cipher_functions[];

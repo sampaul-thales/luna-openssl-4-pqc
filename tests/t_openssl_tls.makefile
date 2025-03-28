@@ -368,7 +368,7 @@ s_time: s_time3
 	@echo
 
 s_time3: tmp3.cafile tmp13.crt
-	openssl s_time $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_3 -cert tmp13.crt -key tmp13.pkey $(CLIENT_CAFILE) \
+	openssl s_time $(SW_ENGINE_CLIENT) $(SW_KEYFORM_CLIENT) -tls1_3 $(GROUPS_OPTS) -cert tmp13.crt -key tmp13.pkey $(CLIENT_CAFILE) \
 	  -time 15 -verify 2
 	@echo
 

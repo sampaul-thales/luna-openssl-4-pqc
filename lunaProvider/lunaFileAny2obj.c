@@ -193,6 +193,7 @@ static int pvk2obj_decode(void *provctx, OSSL_CORE_BIO *cin, int selection,
     const unsigned char *p;
     unsigned int saltlen, keylen;
     int ok = 0;
+    int isdss = -1;
 
     LUNA_PRINTF(("\n"));
     if (in == NULL)
@@ -215,7 +216,11 @@ static int pvk2obj_decode(void *provctx, OSSL_CORE_BIO *cin, int selection,
 
     ERR_set_mark();
     p = (unsigned char *)&mem->data[0];
+#ifdef LUNA_OSSL_3_5
+    ok = ossl_do_PVK_header(&p, 24, 0, &isdss, &saltlen, &keylen) > 0;
+#else
     ok = ossl_do_PVK_header(&p, 24, 0, &saltlen, &keylen) > 0;
+#endif
     ERR_pop_to_mark();
     if (!ok)
         goto next;
