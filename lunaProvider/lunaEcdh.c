@@ -22,11 +22,12 @@
 #include <openssl/params.h>
 #include <openssl/err.h>
 #include <openssl/proverr.h>
-#include "prov/provider_ctx.h"
-#include "prov/providercommon.h"
-#include "prov/implementations.h"
-#include "prov/securitycheck.h"
-#include "crypto/ec.h" /* ossl_ecdh_kdf_X9_63() */
+
+//#include "prov/provider_ctx.h"
+//#include "prov/providercommon.h"
+//#include "prov/implementations.h"
+//#include "prov/securitycheck.h"
+//#include "crypto/ec.h"
 
 #include "lunaCommon.h"
 
