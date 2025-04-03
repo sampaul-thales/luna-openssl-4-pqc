@@ -23,12 +23,6 @@
 #include <openssl/err.h>
 #include <openssl/proverr.h>
 
-//#include "prov/provider_ctx.h"
-//#include "prov/providercommon.h"
-//#include "prov/implementations.h"
-//#include "prov/securitycheck.h"
-//#include "crypto/ec.h"
-
 #include "lunaCommon.h"
 
 static OSSL_FUNC_keyexch_newctx_fn luna_ecdh_newctx;
